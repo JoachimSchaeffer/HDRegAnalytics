@@ -14,26 +14,44 @@ rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
 
 from src.helper import truncate_colormap
 
-def nullspace_correction(w_alpha, w_beta, X, Vdlin, gs=[None], comp_block=0, snig=0):
+def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, snig=False):
     """This functions performs a nulspace normalization of regression coefficents.
-
-    Inputs:
-    w_alpha: linearize feature coefficient vector 
-    w_beta: regression coefficient vector from (latent) variable method 
-    X: Data matrix that was used for estimating the regression coefficeint
-    Predictions can be made via np.dot(X, w_alpha) or X@w_alpha
-    p: vector of penalizations of deviations form the nulspace vector
-    
-    Return: 
-    w_nulspace: vector that is, depending on p, close to the nulspace. 
     The problem is set up such that the L2 norm differences between ther regression 
-    coefficients is minimzed. If vecotrs close to the nulspace are used, they are penalized by p. 
-    
-    Purpose: 
-    
+    coefficients is minimzed.
+
+    Parameters
+    ----------
+    w_alpha : ndarray
+        1D array of linear feature coefficient vector 
+    w_beta : ndarray
+        1D array of regression coefficients
+    X : ndarray 
+        2D Data matrix that was used for estimating the regression coefficeint
+        Predictions can be made via np.dot(X, w_alpha) or X@w_alpha
+    x : ndarray
+        1D array of values of the smooth domain
+    gs : ndarray, default=None
+        1D array of penalizations of deviations form the nulspace vector
+    comp_block : bool, default=False
+        Use component block method
+    snig: bool, default=False
+        Sniggel penelization via Toeplitz matrix
+
+    Returns 
+    ----------
+    v : ndarray
+        1D array of of regression coefficeint contianed in teh nullspace that minimize the L2-norm
+    v_ : ndarray
+        2D array length(gs) times length w_alpha 
+        Regression coefficeints minimizing L2 norm but deviations from the nullsapce according gs are allowed 
+    norm_ : ndarray 
+        1D array of length(gs) storing the L2 norm between the modified regression coefficient and remaining regression coefficeint
+    gs : ndarray
+        1D array of penalizations of deviations form the nulspace vector    
+        Either equal to inpiuts or derived in the function    
     """
     points = len(w_alpha)
-    if gs[0]==None:
+    if gs is None:
         gs = np.logspace(-5, 3, 30)
         gs = np.append(gs, [2500, 5000, np.int((10**4)*(np.max(X)-np.min(X)))])
     # difference between coefficients
@@ -71,13 +89,12 @@ def nullspace_correction(w_alpha, w_beta, X, Vdlin, gs=[None], comp_block=0, sni
         right = np.concatenate((-v12@v22.T, -v22@v22.T), axis=0)
         v_ = np.concatenate((left, right), axis=1)@w
 
-        plt.plot(Vdlin, v_, label='Simplified Equations')
-        plt.plot(Vdlin, v, label='Non Simplified Equations')
+        plt.plot(x, v_, label='Simplified Equations')
+        plt.plot(x, v, label='Non Simplified Equations')
         plt.legend()
         plt.show()
 
     # Approach of Toeplitz matrix regularization 
-
     # r1 = np.concatenate((np.array([1]), np.zeros(points-2)))
     # c1 = np.concatenate((np.array([1, -1]), np.zeros(points-2)))
     # E1 = toeplitz(r1, c1)
@@ -105,9 +122,39 @@ def nullspace_correction(w_alpha, w_beta, X, Vdlin, gs=[None], comp_block=0, sni
         return v, v_, norm_, gs
 
 
-def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_alpha='', coef_name_beta='', return_fig=1):
+def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_alpha='', coef_name_beta='', return_fig=True):
     """Plot the nullspace correction
 
+    Parameters 
+    ----------
+    w_alpha : ndarray
+        1D array of linear feature coefficient vector 
+    w_beta : ndarray
+        1D array of regression coefficients
+    v : ndarray
+        1D array of of regression coefficeint contianed in teh nullspace that minimize the L2-norm
+    gs : ndarray
+        1D array of penalizations of deviations form the nulspace vector    
+        Either equal to inpiuts or derived in the function    
+    X : ndarray 
+        2D Data matrix that was used for estimating the regression coefficeint
+        Predictions can be made via np.dot(X, w_alpha) or X@w_alpha
+    x : ndarray
+        1D array of values of the smooth domain
+    name : str, default=''
+        Name of the Plot, suptitle of the Matplotlib function
+    coef_name_alpha : str, defualt='' 
+        Description/label for coefficients alpha
+    coef_name_beta : str, defailt=''
+        Description/label for coefficients beta
+    return_fig : bool, default=True
+        Indicatees whetehr function returns figure or not
+
+    Returns
+    -------
+    fig : object
+        matplotlib figure object
+    ax : object 
 
     """
     plt.style.use('./styles/plots-latex.mplstyle')

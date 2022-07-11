@@ -7,15 +7,9 @@ from src.nullspace import nullspace_correction
 from src.nullspace import plot_nullspace_correction
 
 class Basis():
-    """Basis function
-    :param function: basis function
-    :type function: function
-    :param \**kwargs:
-        See below
-    :Keyword Arguments:
-        * """
+    """Basis function class
+    """
     def __init__(self, function, number, **kwargs):
-        """"""
         self.arguments=kwargs
         self.number=number
         self.function=function
@@ -24,13 +18,24 @@ class Basis():
         self.x = None
 
     def Phi(self, x):
+        """Create basis vector phi
+        
+        Parameters
+        ----------
+        x : ndarray 
+            1D array of x values where the function should be evaluated
+        """
         self.Phi_vals = self.function(x, num_basis=self.number, **self.arguments)
         self.x = x
         return self
 
     def construct_X_data(self, basis_weights):
         """Constructs a data matrix based on
-        basis_weights: 2D numpy array, rows equal to desired observations in the data matrix, cols equal num_basis
+
+        Parameters
+        ----------
+        basis_weights: ndarray
+            2D array of rows equal to desired observations in the data matrix, cols equal num_basis
         """
         if self.number != basis_weights.shape[1]:
             raise ValueError("Number of basis weights per observation must equal the number defined for this object!")
@@ -42,6 +47,11 @@ class Basis():
 
     def add_wgn(self, snr):
         """Add white Gaussian noise to measurements
+
+        Parameters
+        ----------
+        snr: float
+            signal to noise ration for gaussion noise that's added to the data 
         """
         # Add Gaussian noise to the measurements
         # Snippet below partly copied/adapted/inspired by: 
@@ -79,6 +89,17 @@ class SynMLData(Basis):
         self.nullsp = {}
 
     def place_X_y(self, X, x, y):
+        """Insert data via this class inc ase you don't want to use data generation via basis classes
+
+        Parameters
+        ----------
+        X : ndarray
+            2D numpy array of data 
+        x : ndarray
+            1D numpy array, representing the domain values small x corresponding to each column in X
+        y : ndarray
+            1D array of responses
+        """
         self.X = X
         self.X_ = self.X - np.mean(self.X, axis=0)
         self.x = x
@@ -95,14 +116,26 @@ class SynMLData(Basis):
         return self
 
     def construct_y_data(self, response_trans):
-        """Construct responsese"""
+        """Construct responsese
+                
+        Parameters
+        ----------
+        response_trans : callable
+            function that transforms X to y
+        """
         self.y = response_trans(self.X)
         return self
     
     def learn_weights(self, model, string_id):
         """Learn weights from data and sotre them in the dictionary. 
-        model must be an object with methods fit(), predict() (e.g. sklearn)
-        for custom models you might want to write a wrapper class that
+
+        Parameters
+        ----------
+        model : object
+            sklearn model object with methods fit(), predict() (e.g. sklearn)
+            for custom models you might want to write a wrapper
+        string_id : str
+            model description string
         """
         # We manually mean center the data here for this purpose
         self.X_ = self.X - np.mean(self.X, axis=0)
@@ -195,6 +228,13 @@ class SynMLData(Basis):
         Parameters
         ----------
         title : str Suptitle of the resulting figure
+
+        Returns
+        -------
+        fig : object
+            matplotlib figure object
+        ax : object 
+            matplotlib axis objects
         """
         fig, ax = plot_nullspace_correction(
                 self.nullsp['w_alpha'], self.nullsp['w_beta'], self.nullsp['v_'], self.nullsp['gamma'],
@@ -204,7 +244,7 @@ class SynMLData(Basis):
 
 # Differen basis for functions.e
 def polynomial(x, num_basis=4, data_limits=[-1., 1.]):
-    "Polynomial basis"
+    """Polynomial basis"""
     centre = data_limits[0]/2. + data_limits[1]/2.
     span = data_limits[1] - data_limits[0]
     z = np.asarray(x, dtype=float) - centre
