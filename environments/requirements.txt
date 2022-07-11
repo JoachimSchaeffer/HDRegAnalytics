@@ -1,0 +1,11 @@
+numpy
+scipy
+pandas
+matplotlib
+sklearn
+jax
+jupyterlab
+flake8
+isort
+mypy
+pytest
