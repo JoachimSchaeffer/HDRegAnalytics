@@ -215,8 +215,10 @@ class SynMLData(Basis):
         y_range = np.max(y_) - np.min(y_)
         min_exp = -5
         max_exp = np.floor(np.log10(int((10**2)*y_range)))
-        gamma_vals  = np.logspace(min_exp, max_exp, nb_gammas)
-        gamma_vals = np.append(gamma, [int((10**2)*y_range)])
+
+        gamma_vals = np.linspace(10**(-5), (10**2)*y_range, nb_gammas)
+        # gamma_vals  = np.logspace(min_exp, max_exp, nb_gammas)
+        # gamma_vals = np.append(gamma_vals, [int((10**2)*y_range)])
 
         self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = nullspace_correction(
             self.nullsp['w_alpha'], self.nullsp['w_beta'], X, x, gs=gamma_vals, comp_block=0, snig=0)
