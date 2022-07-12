@@ -1,4 +1,3 @@
-figure.figsize  : 16, 8 # Size of the figure
 font.size : 23        # controls default text sizes
 axes.titlesize : 31     # fontsize of the axes title
 axes.labelsize : 26    # fontsize of the x and y labels

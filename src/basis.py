@@ -216,7 +216,7 @@ class SynMLData(Basis):
         min_exp = -5
         max_exp = np.floor(np.log10(int((10**2)*y_range)))
 
-        gamma_vals = np.linspace(10**(-5), (10**2)*y_range, nb_gammas)
+        gamma_vals = np.geomspace(10**(-5), (10**2)*y_range, nb_gammas)
         # gamma_vals  = np.logspace(min_exp, max_exp, nb_gammas)
         # gamma_vals = np.append(gamma_vals, [int((10**2)*y_range)])
 
@@ -224,12 +224,16 @@ class SynMLData(Basis):
             self.nullsp['w_alpha'], self.nullsp['w_beta'], X, x, gs=gamma_vals, comp_block=0, snig=0)
         return  self
 
-    def plot_nullspace_correction(self, title=''):
+    def plot_nullspace_correction(self, std=False, title=''):
         """Function that calls plot_nullspace_correction, uses basis object.
 
         Parameters
         ----------
-        title : str Suptitle of the resulting figure
+        title : str 
+            Suptitle of the resulting figure
+        std : bool, default=False
+            Indicate whether Standardization(Z-Scoring) shall be performed. 
+            If yes, use X_std of the data_ml_object, if not use X.
 
         Returns
         -------
@@ -238,9 +242,14 @@ class SynMLData(Basis):
         ax : object 
             matplotlib axis objects
         """
+        if std: 
+            X = self.X_std
+        else: 
+            X = self.X_
+
         fig, ax = plot_nullspace_correction(
                 self.nullsp['w_alpha'], self.nullsp['w_beta'], self.nullsp['v_'], self.nullsp['gamma'],
-                self.X_, self.x, name=title, coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'])
+                X, self.x, name=title, coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'])
         return fig, ax
     
 

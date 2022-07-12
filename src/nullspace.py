@@ -52,8 +52,9 @@ def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, sni
     """
     points = len(w_alpha)
     if gs is None:
-        gs = np.logspace(-5, 3, 30)
-        gs = np.append(gs, [2500, 5000, np.int((10**4)*(np.max(X)-np.min(X)))])
+        gs = np.geomspace(10**(-5), (10**4)*(np.max(X)-np.min(X)), 30)
+        # gs = np.logspace(-5, 3, 30)
+        # gs = np.append(gs, [2500, 5000, np.int((10**4)*(np.max(X)-np.min(X)))])
     # difference between coefficients
     w = w_alpha - w_beta
     # SVD decomposition of X
@@ -157,12 +158,10 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     ax : object 
 
     """
-    plt.style.use('./styles/plots-latex.mplstyle')
-    points = len(w_alpha)
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
     cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
     
-    cmap = truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.9)
+    cmap = truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.7)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
 
     figsize = [11, 13]
@@ -184,10 +183,10 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     for i in range(v.shape[0]):
         ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(np.log(gs[i])))
 
-    ax[1].plot(x, w_alpha, label=coef_name_alpha, color='g')   
-    ax[1].plot(x, w_beta, label=coef_name_beta , color='k')
+    ax[1].plot(x, w_alpha, label=coef_name_alpha, color='g', linewidth=2.5)   
+    ax[1].plot(x, w_beta, label=coef_name_beta , color='k', linewidth=2.5)
     
-    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=2, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
+    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
     
     ax[1].set_xlabel('x values')
     ax[1].set_ylabel(r'Regression Coefficients $(\bm\beta)$')
