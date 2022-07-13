@@ -183,10 +183,12 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     for i in range(v.shape[0]):
         ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(np.log(gs[i])))
 
-    ax[1].plot(x, w_alpha, label=coef_name_alpha, color='g', linewidth=2.5)   
+    markevery = int(len(x)/15)
+    ax[1].plot(x, w_alpha, label=coef_name_alpha, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5)   
     ax[1].plot(x, w_beta, label=coef_name_beta , color='k', linewidth=2.5)
     
-    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
+    # ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
+    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=r'Appr. contained in $N(X)$')
     
     ax[1].set_xlabel('x values')
     ax[1].set_ylabel(r'Regression Coefficients $(\bm\beta)$')
