@@ -155,11 +155,13 @@ class SynMLData(Basis):
             self.weights[string_id + ' std'] = coef_std
             self.weights[string_id + ' std retrans'] = coef_std/self.std
         except:
-            pass
-
+            self.weights[string_id + ' std'] = 'Undefined Std = 0 for some column'
+            self.weights[string_id + ' std retrans'] = 'Undefined Std = 0 ofr some column'
         return self
     
-    def nullspace_correction(self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, **kwargs):
+    def nullspace_correction(
+        self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, 
+        plot_results=False, save_plot=False, path_save='', file_name='', **kwargs):
         """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.
 
         Parameters
@@ -173,41 +175,70 @@ class SynMLData(Basis):
         std : bool, default=False
             Indicate whether Standardization(Z-Scoring) shall be performed. 
             If yes, use X_std of the data_ml_object, if not use X.
-        
+        plot_results : bool, default=False
+            Indicate whether to plot results
+        save_results : bool, default=False
+            indicate whether to save plot as pdf
+        path_save : str, default=''
+            path for the case save resutls is true
+        fig_name : str, defautl=''
+            figure file name
+
         Returns
         -------
         self
-        """
-        if std: 
-            X = self.X_std
-        else: 
-            X = self.X_
-        x = self.x
 
-        self.nullsp['info'] = ''
-        if w_alpha is None:
-            if 'key_alpha' in kwargs:
-                self.nullsp['w_alpha'] = self.weights[kwargs.get('key_alpha')]
-            else:
-                NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
-        else:
-             self.nullsp['w_alpha'] = w_alpha
+        depending on whether plot_results is true
+        fig : object
+            matplotlib figure object
+        ax : object 
+            matplotlib axis objects
+        """
+
+        if (w_alpha is None) & ('key_alpha' not in kwargs):
+            NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
+
+        if (w_beta is None) & ('key_beta' not in kwargs):
+            NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
+    
+        self.nullsp['w_beta_name'] = w_beta_name
         self.nullsp['w_alpha_name'] = w_alpha_name
 
+        # To keep things simple, standardized weights also included here! 
+        # In case std==False this is not efficient, because the standardized coef. aren't used. 
+        # But it's easier to understand and less verbose. 
+        if w_alpha is None:
+            self.nullsp['w_alpha'] = self.weights[kwargs.get('key_alpha')]
+            self.nullsp['w_alpha_std'] = self.weights[kwargs.get('key_alpha') + ' std']
+        else:
+            self.nullsp['w_alpha'] = w_alpha
+            self.nullsp['w_alpha_std'] = w_alpha * self.std
+
         if w_beta is None:
-            if 'key_beta' in kwargs:
-                self.nullsp['w_beta'] = self.weights[kwargs.get('key_beta')]
-            else:
-                NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
+            self.nullsp['w_beta'] = self.weights[kwargs.get('key_beta')]
+            self.nullsp['w_beta_std'] = self.weights[kwargs.get('key_beta') + ' std']
         else:
             self.nullsp['w_beta'] = w_beta
-        self.nullsp['w_beta_name'] = w_beta_name
+            self.nullsp['w_beta_std'] = w_beta * self.std
+
+        if std: 
+            X = self.X_std
+            self.nullsp['w_alpha_name'] += ' std'
+            self.nullsp['w_beta_name'] += ' std'
+            key_alpha = 'w_alpha_std'
+            key_beta = 'w_beta_std'
+        else:
+            X = self.X_
+            key_alpha = 'w_alpha'
+            key_beta = 'w_beta'
+            
+        x = self.x
+        self.nullsp['info'] = ''
 
         if 'nb_gammas' in kwargs:
             nb_gammas = kwargs.get('nb_gammas')
         else:
             nb_gammas = 30
-
 
         y_ = self.y_
 
@@ -221,8 +252,15 @@ class SynMLData(Basis):
         # gamma_vals = np.append(gamma_vals, [int((10**2)*y_range)])
 
         self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = nullspace_correction(
-            self.nullsp['w_alpha'], self.nullsp['w_beta'], X, x, gs=gamma_vals, comp_block=0, snig=0)
-        return  self
+            self.nullsp[key_alpha], self.nullsp[key_beta], X, x, gs=gamma_vals, comp_block=0, snig=0)
+        
+        if plot_results:
+            fig, ax = self.plot_nullspace_correction(std=std)
+            if save_plot:
+                fig.savefig(path_save + file_name)
+            return self, fig, ax 
+        else:
+            return self
 
     def plot_nullspace_correction(self, std=False, title=''):
         """Function that calls plot_nullspace_correction, uses basis object.
@@ -244,11 +282,15 @@ class SynMLData(Basis):
         """
         if std: 
             X = self.X_std
+            w_alpha = self.nullsp['w_alpha_std']
+            w_beta = self.nullsp['w_beta_std']
         else: 
             X = self.X_
+            w_alpha = self.nullsp['w_alpha']
+            w_beta = self.nullsp['w_beta']
 
         fig, ax = plot_nullspace_correction(
-                self.nullsp['w_alpha'], self.nullsp['w_beta'], self.nullsp['v_'], self.nullsp['gamma'],
+                w_alpha, w_beta, self.nullsp['v_'], self.nullsp['gamma'],
                 X, self.x, name=title, coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'])
         return fig, ax
     
