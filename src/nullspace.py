@@ -4,6 +4,9 @@ from numpy import linalg as LA
 from scipy import linalg
 from scipy.linalg import toeplitz
 
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_percentage_error
+
 import matplotlib.pylab as plt
 import matplotlib.colors as mcolors
 from matplotlib import cm   
@@ -159,7 +162,16 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
 
     """
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
-    cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
+    mape_min = mean_absolute_percentage_error(X@(w_alpha+v[-1,:]), X@w_alpha)
+    mape_max = mean_absolute_percentage_error(X@(w_alpha+v[1,:]), X@w_alpha)
+    
+    # For synthethic data mape_min approx equal mape_max and numeric precision might lead to mape_min > mape_max
+    eps = 10**(-12)
+    if np.abs(mape_min-mape_max) > eps:
+        cNorm  = mcolors.Normalize(vmin=mape_min, vmax=mape_max)
+    else:
+        cNorm  = mcolors.Normalize(vmin=mape_min-eps, vmax=mape_max+eps)
+    # cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
     
     cmap = truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.7)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
@@ -179,9 +191,12 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     ax[0].vlines(0, y_min, y_max, colors='k', linestyles='solid', linewidths=0.8)
     ax[0].hlines(0, min(x), max(x), colors='k', linestyles='solid', linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
-  
+
+    # Initializing the mape error to 2, makes it easy to spot issues
+    mape = 2*np.ones(v.shape[0])
     for i in range(v.shape[0]):
-        ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(np.log(gs[i])))
+        mape[i] = mean_absolute_percentage_error(X@(w_alpha+v[i,:]), X@w_alpha)  
+        ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(mape[i]))
 
     markevery = int(len(x)/15)
     ax[1].plot(x, w_alpha, label=coef_name_alpha, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5)   
@@ -205,7 +220,9 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), 
                           ax=ax[1], pad=0.01)
  
-    cb.set_label(r'$\ln(\gamma)$', labelpad=10)
+    # cb.set_label(r'$\ln(\gamma)$', labelpad=10)
+    # cb.set_label(r'MAPE($\mathbf{X}\boldsymbol{\beta}_{a+v(\gamma)}, \mathbf{X}\boldsymbol{\beta}_a$)', labelpad=10)
+    cb.set_label('MAPE', labelpad=10)
 
     ax[0].grid()    
     ax[1].grid()
