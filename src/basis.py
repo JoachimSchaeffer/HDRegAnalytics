@@ -1,7 +1,6 @@
 # The following code is partly copied, extended on build on https://github.com/lawrennd/mlai/
 # based on commit: bb4b776a21ec17001bf20ee6406324217f902944
 # expand it to the different basis funcitons in the source. 
-from math import gamma
 import numpy as np
 from src.nullspace import nullspace_correction
 from src.nullspace import plot_nullspace_correction
@@ -45,33 +44,6 @@ class Basis():
             self.X[i, :] = np.dot(self.Phi_vals, basis_weights[i, :].T)
         return self
 
-    def add_wgn(self, snr):
-        """Add white Gaussian noise to measurements
-
-        Parameters
-        ----------
-        snr: float
-            signal to noise ration for gaussion noise that's added to the data 
-        """
-        # Add Gaussian noise to the measurements
-        # Snippet below partly copied/adapted/inspired by: 
-        # https://stackoverflow.com/questions/14058340/adding-noise-to-a-signal-in-python
-        # Answer from Noel Evans, accessed: 18.05.2022, 15:37 CET
-        # Calculate signal power and convert to dB 
-        rows, columns = self.X.shape
-        for i in range(rows):
-            row_i = self.X[i, :]
-            sig_avg_watts = np.mean(row_i**2)
-            sig_avg_db = 10 * np.log10(sig_avg_watts)
-            # Calculate noise according to [2] then convert to watts
-            noise_avg_db = sig_avg_db - snr
-            noise_avg_watts = 10 ** (noise_avg_db / 10)
-            # Generate an sample of white noise
-            mean_noise = 0
-            noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), columns)
-            # Noise up the original signal
-            self.X[i, :] += noise
-        return self
         
 class SynMLData(Basis):
     """Synthethic Machine Learning Data class. this class inherits from basis (takes Phi and X from basis)
@@ -125,6 +97,57 @@ class SynMLData(Basis):
         """
         self.y = response_trans(self.X)
         return self
+
+    def add_wgn(self, add_noise_X=True, snr_x=50, add_noise_y=False, snr_y=50):
+        """Add white Gaussian noise to measurements
+
+        Parameters
+        ----------
+        snr: float
+            signal to noise ration for gaussion noise that's added to the data 
+        """
+        # Add Gaussian noise to the measurements
+        # Snippet below partly copied/adapted/inspired by: 
+        # https://stackoverflow.com/questions/14058340/adding-noise-to-a-signal-in-python
+        # Answer from Noel Evans, accessed: 18.05.2022, 15:37 CET
+        # Calculate signal power and convert to dB 
+
+        rows, columns = self.X.shape
+        # X
+        if add_noise_X:
+            for i in range(rows):
+                row_i = self.X[i, :]
+                sig_avg_watts = np.mean(row_i**2)
+                sig_avg_db = 10 * np.log10(sig_avg_watts)
+                # Calculate noise according to [2] then convert to watts
+                noise_avg_db = sig_avg_db - snr_x
+                noise_avg_watts = 10 ** (noise_avg_db / 10)
+                # Generate an sample of white noise
+                mean_noise = 0
+                noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), columns)
+                # Noise up the original signal
+                self.X[i, :] += noise
+
+            # Update the mean centered data
+            self.X_ = self.X - np.mean(self.X, axis=0)
+
+        if add_noise_y:
+            for i, yi in enumerate(self.y): 
+                sig_avg_watts = np.mean(yi**2)
+                sig_avg_db = 10 * np.log10(sig_avg_watts)
+                # Calculate noise according to [2] then convert to watts
+                noise_avg_db = sig_avg_db - snr_y
+                noise_avg_watts = 10 ** (noise_avg_db / 10)
+                # Generate an sample of white noise
+                mean_noise = 0
+                noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), 1)
+                # Noise up the original signal
+                self.y[i] += noise
+
+            # Update the mean centered response
+            self.y_ = self.y - np.mean(self.y)
+            
+        return self
     
     def learn_weights(self, model, string_id):
         """Learn weights from data and sotre them in the dictionary. 
@@ -139,7 +162,7 @@ class SynMLData(Basis):
         """
         # We manually mean center the data here for this purpose
         self.X_ = self.X - np.mean(self.X, axis=0)
-        self.y_ = self.y-self.y.mean()
+        self.y_ = self.y - np.mean(self.y)
 
         self.std = np.std(self.X_, axis=0)
         self.X_std = self.X_ / self.std
@@ -291,7 +314,7 @@ class SynMLData(Basis):
 
         fig, ax = plot_nullspace_correction(
                 w_alpha, w_beta, self.nullsp['v_'], self.nullsp['gamma'],
-                X, self.x, name=title, coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'])
+                X, self.x, self.y_, name=title, coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'])
         return fig, ax
     
 

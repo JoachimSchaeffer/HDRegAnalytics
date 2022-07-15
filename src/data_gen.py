@@ -85,9 +85,9 @@ def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1]):
     rows = X.shape[0]
     columns = X.shape[1]
     y = np.zeros([rows])
+    low_ind = int(percentage_range_x_to_t[0]*columns)
+    high_ind = int(percentage_range_x_to_t[1]*columns)
     for i in range(rows):
         row_i = X[i, :]
-        low_ind = int(percentage_range_x_to_t[0]*columns)
-        high_ind = int(percentage_range_x_to_t[1]*columns)
         y[i] = targetfun(row_i[low_ind:high_ind])
     return y

@@ -126,7 +126,7 @@ def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, sni
         return v, v_, norm_, gs
 
 
-def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_alpha='', coef_name_beta='', return_fig=True):
+def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_name_alpha='', coef_name_beta='', return_fig=True):
     """Plot the nullspace correction
 
     Parameters 
@@ -162,15 +162,20 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
 
     """
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
-    mape_min = mean_absolute_percentage_error(X@(w_alpha+v[-1,:]), X@w_alpha)
-    mape_max = mean_absolute_percentage_error(X@(w_alpha+v[1,:]), X@w_alpha)
-    
+    mape_vals = [
+        100*mean_absolute_percentage_error(y, X@(w_alpha+v[-1,:])),
+        100*mean_absolute_percentage_error(y, X@(w_alpha+v[1,:]))]
+    mape_min = np.min(mape_vals)
+    mape_max = np.max(mape_vals)
+    cNorm  = mcolors.Normalize(vmin=mape_min, vmax=mape_max)
+
+    # Outdated
     # For synthethic data mape_min approx equal mape_max and numeric precision might lead to mape_min > mape_max
-    eps = 10**(-12)
-    if np.abs(mape_min-mape_max) > eps:
-        cNorm  = mcolors.Normalize(vmin=mape_min, vmax=mape_max)
-    else:
-        cNorm  = mcolors.Normalize(vmin=mape_min-eps, vmax=mape_max+eps)
+    # eps = 10**(-12)
+    # if np.abs(mape_min-mape_max) > eps:
+    #     cNorm  = mcolors.Normalize(vmin=mape_min, vmax=mape_max)
+    # else:
+    #     cNorm  = mcolors.Normalize(vmin=mape_min-eps, vmax=mape_max+eps)
     # cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
     
     cmap = truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.7)
@@ -195,15 +200,20 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
     # Initializing the mape error to 2, makes it easy to spot issues
     mape = 2*np.ones(v.shape[0])
     for i in range(v.shape[0]):
-        mape[i] = mean_absolute_percentage_error(X@(w_alpha+v[i,:]), X@w_alpha)  
-        ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(mape[i]))
+        mape[i] = mean_absolute_percentage_error(y, X@(w_alpha+v[i,:]))  
+        ax[1].plot(x, w_alpha+v[i,:], color=scalarMap.to_rgba(100*mape[i]), zorder=i)
 
     markevery = int(len(x)/15)
-    ax[1].plot(x, w_alpha, label=coef_name_alpha, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5)   
-    ax[1].plot(x, w_beta, label=coef_name_beta , color='k', linewidth=2.5)
+    mape_alpha = 100*mean_absolute_percentage_error(y, X@(w_alpha))
+    mape_beta = 100*mean_absolute_percentage_error(y, X@(w_beta))
+
+    coef_alpha_label = f"{coef_name_alpha}, MAPE: {mape_alpha:.2f} \%"
+    coef_beta_label = f"{coef_name_beta}, MAPE: {mape_beta:.2f} \%"
+    ax[1].plot(x, w_alpha, label=coef_alpha_label, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5, zorder=v.shape[0]+1)   
+    ax[1].plot(x, w_beta, label=coef_beta_label, color='k', linewidth=2.5, zorder=v.shape[0]+1)
     
     # ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
-    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=r'Appr. contained in $N(X)$')
+    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=r'Appr. contained in $\mathcal{\mathbf{N}}(X)$')
     
     ax[1].set_xlabel('x values')
     ax[1].set_ylabel(r'Regression Coefficients $(\bm\beta)$')
@@ -222,7 +232,7 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, name='', coef_name_a
  
     # cb.set_label(r'$\ln(\gamma)$', labelpad=10)
     # cb.set_label(r'MAPE($\mathbf{X}\boldsymbol{\beta}_{a+v(\gamma)}, \mathbf{X}\boldsymbol{\beta}_a$)', labelpad=10)
-    cb.set_label('MAPE', labelpad=10)
+    cb.set_label(r'MAPE (\%)', labelpad=10)
 
     ax[0].grid()    
     ax[1].grid()
