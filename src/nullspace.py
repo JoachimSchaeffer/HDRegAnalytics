@@ -238,9 +238,8 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
     ax[1].grid()
     ax[1].legend(loc=2)
     fig.suptitle(name)
-
-    plt.show()
     if return_fig:
         return fig, ax
     else:
+        plt.show()
         return None
