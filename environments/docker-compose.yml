@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  HDfeatlin:
+    image: high-dimensional-feat:latest
+    container_name: high-dimensional-feat
+    build: ./
+    expose:
+      - "8056"
+    ports:
+      - "8056:8056"
+    volumes:
+      - .:/home/HDfeatlin-user
+    command: /bin/bash /home/HDfeatlin-user/jupyter.sh

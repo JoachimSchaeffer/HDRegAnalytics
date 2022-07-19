@@ -11,18 +11,20 @@ ENV PYTHONUNBUFFERED=1
 
 # Install pip requirements
 COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
+RUN apt-get update \
+&& apt-get install gcc -y \
+&& apt-get -y install texlive-latex-extra texlive-fonts-recommended dvipng \
+&& apt-get -y install cm-super \
+&& apt-get -y install ghostscript \
+&& apt-get clean 
 
-WORKDIR /home
-COPY . /home
+RUN python -m pip install -r requirements.txt
 
 # Creates a non-root user with an explicit UID and adds permission to access the /app folder
 # For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" docker-user && chown -R docker-user /home
-USER docker-user
+# RUN adduser -u 5678 --disabled-password --gecos "" HDfeatlin-user && chown -R HDfeatlin-user /home
+RUN useradd -ms /bin/bash HDfeatlin-user
+USER HDfeatlin-user
 
-WORKDIR /home/docker-user
-
-# USER docker-user
-
-# WORKDIR /home/docker-user
+WORKDIR /home/HDfeatlin-user
+COPY . /home/HDfeatlin-user
