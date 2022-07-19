@@ -1,27 +1,28 @@
-# The following code is partly copied, extended on build on https://github.com/lawrennd/mlai/
+# The following code is partly copied, extended on build on:
+# https://github.com/lawrennd/mlai/
 # based on commit: bb4b776a21ec17001bf20ee6406324217f902944
-# expand it to the different basis funcitons in the source. 
+# expand it to the different basis funcitons in the source.
 import numpy as np
 from src.nullspace import nullspace_correction
 from src.nullspace import plot_nullspace_correction
+
 
 class Basis():
     """Basis function class
     """
     def __init__(self, function, number, **kwargs):
-        self.arguments=kwargs
-        self.number=number
-        self.function=function
+        self.arguments = kwargs
+        self.number = number
+        self.function = function
         self.Phi_vals = None
         self.X = None
         self.x = None
 
     def Phi(self, x):
         """Create basis vector phi
-        
         Parameters
         ----------
-        x : ndarray 
+        x : ndarray
             1D array of x values where the function should be evaluated
         """
         self.Phi_vals = self.function(x, num_basis=self.number, **self.arguments)
@@ -30,14 +31,14 @@ class Basis():
 
     def construct_X_data(self, basis_weights):
         """Constructs a data matrix based on
-
         Parameters
         ----------
         basis_weights: ndarray
             2D array of rows equal to desired observations in the data matrix, cols equal num_basis
         """
         if self.number != basis_weights.shape[1]:
-            raise ValueError("Number of basis weights per observation must equal the number defined for this object!")
+            raise ValueError(
+                "Number of basis weights per observation must equal the number defined for this object!")
         self.X = np.zeros((basis_weights.shape[0], self.Phi_vals.shape[0]))
         for i in range(basis_weights.shape[0]):
             # Itereate trhough the rows. 

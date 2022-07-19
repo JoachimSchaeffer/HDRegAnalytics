@@ -1,5 +1,6 @@
 Author: Joachim Schaeffer
 Email: joachim.schaeffer@posteo.de
+
 ReadMe for repository accompanying [this publication]
 
 ## Code
