@@ -70,7 +70,11 @@ def plot_x_tt2(ax, x, X, color, labelx, labely, label_data='Train', zorder=1):
     return ax
 
 def plot_corrheatmap(ax, x, X, cmap, labelx, labely, title, cols=True): 
-    X_df = pd.DataFrame(X[:, :])
+    if cols:
+        X_df = pd.DataFrame(X[:, ::10])
+        x = x[::10]
+    else: 
+        X_df = pd.DataFrame(X[:, :])
     X_corr = np.abs(X_df.corr())
     if cols:
         X_corr.set_index(np.round(x, 1), inplace=True)
