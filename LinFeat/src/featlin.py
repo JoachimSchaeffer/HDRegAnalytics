@@ -59,6 +59,70 @@ def jax_moment(X, power):
         shape = X.shape[0]
     return jnp.sum(jnp.power(X_tilde, power))/shape
 
+def plot_x_tt2(ax, x, X, color, labelx, labely, label_data='Train', zorder=1): 
+    ax.plot(x, X[:, :].T, label=label_data, lw=1, color=color, zorder=zorder)
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc=4)
+    #axs.set_title('Training Data')
+    ax.set_xlabel(labelx)
+    ax.set_ylabel(labely)
+    return ax
+
+def plot_corrheatmap(ax, x, X, cmap, labelx, labely, title, cols=True): 
+    X_df = pd.DataFrame(X[:, :])
+    X_corr = np.abs(X_df.corr())
+    if cols:
+        X_corr.set_index(np.round(x, 1), inplace=True)
+        X_corr.set_axis(np.round(x, 1), axis='columns', inplace=True)
+    mask = np.triu(X_corr)
+    if cols: 
+        ax = sns.heatmap(
+            X_corr, 
+            vmin=0, vmax=1, center=0.4,
+            cmap=cmap,
+            square=True, 
+            xticklabels=100,
+            yticklabels=100,
+            ax = ax,
+            mask=mask
+        )
+    else:
+        ax = sns.heatmap(
+            X_corr, 
+            vmin=0.7, vmax=1, center=0.85,
+            cmap=cmap,
+            square=True,
+            xticklabels=10,
+            yticklabels=10,
+            ax = ax,
+            mask=mask
+        )
+    ax.set_xticklabels(
+        ax.get_xticklabels(),
+        rotation=45,
+        horizontalalignment='right'
+    );
+    ax.set_yticklabels(
+        ax.get_xticklabels(),
+        rotation=45,
+        horizontalalignment='right'
+    );
+    ax.set_title(title)
+    ax.set_xlabel(labelx)
+    ax.set_ylabel(labely)
+    # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
+    return ax
+
+def plot_stats(ax, x, X, c1, c2, c3, labelx, labely):
+    ax.plot(x, np.abs(np.mean(X.T, axis=1)), label='|Mean|', lw=2.5, color=c1)
+    ax.plot(x, np.abs(np.median(X.T, axis=1)), label='|Median|', lw=2.5, color=c3)
+    ax.plot(x, np.std(X.T, axis=1), label='Std.', lw=2.5, color=c2)
+    ax.legend(loc=2)
+    ax.set_xlabel(labelx)
+    ax.set_ylabel(labely)
+    return ax 
+
 @mpl.rc_context(fname='./styles/linearization_plot.mplstyle')
 def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_names, plot_labels, cmap=sns.color_palette("icefire", as_cmap=True), show=True):
     ''' Function to create plot of data and regression coefficients
@@ -82,71 +146,13 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
 
     # Think about whether to include plot of test set in here as well.
     # 0, 0: Data
-    axs[0, 0].plot(x, X[:, :].T, label='Train', lw=1, color=color_list[0])
-    handles, labels = axs[0, 0].get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    axs[0, 0].legend(by_label.values(), by_label.keys(), loc=4)
-    #axs[0, 0].set_title('Training Data')
-    axs[0, 0].set_xlabel(plot_labels['xdata_label'])
-    axs[0, 0].set_ylabel(plot_labels['ydata_label'])
-
+    axs[0, 0] = plot_x_tt2(axs[0, 0], x, X, color_list[0], plot_labels['xdata_label'], plot_labels['ydata_label'])
     # 0, 1: Column correlations 
+    axs[0, 1] = plot_corrheatmap(axs[0, 1], x, X, cmap, plot_labels['xdata_label'], plot_labels['xdata_label'], '|Corr.| Columns')
     # 0, 2: Row correlations
-    X_df = pd.DataFrame(X[:, :])
-    X_trans_df = pd.DataFrame(X[:, :].T)
-    X_corr = X_df.corr()
-    X_corr.set_index(np.round(x, 1), inplace=True)
-    X_corr.set_axis(np.round(x, 1), axis='columns', inplace=True)
-    mask = np.triu(X_corr)
-
-    ax = sns.heatmap(
-        X_corr, 
-        vmin=-0.2, vmax=1, center=0.4,
-        cmap=cmap,
-        square=True, 
-        xticklabels=100,
-        yticklabels=100,
-        ax = axs[0, 1],
-        mask=mask
-    )
-    ax.set_xticklabels(
-        ax.get_xticklabels(),
-        rotation=45,
-        horizontalalignment='right'
-    );
-    axs[0, 1].set_title('Corr. of Columns')
-    axs[0, 1].set_xlabel(plot_labels['xdata_label'])
-    axs[0, 1].set_ylabel(plot_labels['xdata_label'])
-    # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
-
-    X_trans_corr = X_trans_df.corr()
-    mask = np.triu(X_trans_corr)
-    ax = sns.heatmap(
-        X_trans_corr, 
-        vmin=0.7, vmax=1, center=0.85,
-        cmap=cmap,
-        square=True,
-        xticklabels=10,
-        yticklabels=10,
-        ax = axs[0, 2],
-        mask=mask
-    )
-    ax.set_xticklabels(
-        ax.get_xticklabels(),
-        rotation=45,
-        horizontalalignment='right'
-    );
-    axs[0, 2].set_title('Corr. of Rows')
-    axs[0, 2].set_xlabel(plot_labels['row_label'])
-    axs[0, 2].set_ylabel(plot_labels['row_label'])
-    
+    axs[0, 2] = plot_corrheatmap(axs[0, 2], np.arange(X.T.shape[1]), X.T, cmap, plot_labels['row_label'], plot_labels['row_label'], '|Corr.| Rows')
     # 1, 0: Mean & std of data
-    axs[1, 0].plot(x, np.abs(np.mean(X.T, axis=1)), label='|Mean Train|', lw=2.5, color=color_list[0])
-    axs[1, 0].plot(x, np.std(X.T, axis=1), label='Std Train', lw=2.5, color=color_list[1])
-    axs[1, 0].plot(x, np.abs(np.median(X.T, axis=1)), label='|Median Train|', lw=2.5, color=color_list[2])
-    axs[1, 0].legend(loc=2)
-    axs[1, 0].set_xlabel(plot_labels['xdata_label'])
-    axs[1, 0].set_ylabel(plot_labels['ydata_label'])
+    axs[1, 0] =plot_stats(axs[1, 0], x, X, color_list[0], color_list[1], color_list[2], plot_labels['xdata_label'], plot_labels['ydata_label'])
     
     # Empty plots could be filled with correlation between the training and the test dataset rows. 
     # This would provide insights into issue with the data splitting
@@ -223,3 +229,69 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
         plt.show()
             
     return fig, axs
+
+# Generate synthetic data
+
+def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
+    '''This function generates synthethic data to test the linearization methodology. 
+    fun: function that is defined for all values inside range. Representing a measurement that was taken from any process. 
+    range_x: np.array with two elements, the first being strictly smaller than the second, defining the meaning of the columsn
+    range_m: range of factor
+        each row of x is equal to m*fun(x), where m is sampled from a uniform distribution
+    datapoints: number of linearly spaced datapoints for evaluating fun, equal to number of columns of X
+    rows: number of rows of X, i.e. 
+    snr_x: Signal to noise ratio of AWGN to be added on the signal, if -1, then this functions adds no noise to the signal
+    Returns: X
+    '''
+
+    # Sample m
+    m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
+
+    # create X and y
+    x = np.linspace(range_x[0], range_x[1], columns)
+    fun_values = fun(x)
+    X = np.zeros([rows, columns])
+    y = np.zeros(rows)
+    for i in range(rows):
+        row_i = m[i]*fun_values
+        if snr_x != -1: 
+            # Add Gaussian noise to the measurements
+            # Snippet below partly copied/adapted/inspired by: 
+            # https://stackoverflow.com/questions/14058340/adding-noise-to-a-signal-in-python
+            # Answer from Noel Evans, accessed: 18.05.2022, 15:37 CET
+            # Calculate signal power and convert to dB 
+            sig_avg_watts = np.mean(row_i**2)
+            sig_avg_db = 10 * np.log10(sig_avg_watts)
+            # Calculate noise according to [2] then convert to watts
+            noise_avg_db = sig_avg_db - snr_x
+            noise_avg_watts = 10 ** (noise_avg_db / 10)
+            # Generate an sample of white noise
+            mean_noise = 0
+            noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), columns)
+            # Noise up the original signal
+            row_i += noise
+
+        X[i, :] = row_i
+
+    return np.array(X), x
+
+
+def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1]):
+    '''This function takes the wide data matix X as an input and generates target function values y based on the defined functions
+    X: \in R^mxn with n>>m (wide data matrix, used as input for the targetfunction y
+    targetfun: Underlying relationship between X and y. This can be any function from R^n -> R^1
+        This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology. 
+    percentage_range_x_to_t: array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1, 
+        defines the range of input data that shall be used to generate the target function
+        The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y  
+    '''
+    rows = X.shape[0]
+    columns = X.shape[1]
+    y = np.zeros([rows])
+    for i in range(rows):
+        row_i = X[i, :]
+        low_ind = int(percentage_range_x_to_t[0]*columns)
+        high_ind = int(percentage_range_x_to_t[1]*columns)
+        y[i] = targetfun(row_i[low_ind:high_ind])
+    
+    return y
