@@ -1,8 +1,0 @@
-figure.figsize  : 8, 4  # Size of the figure
-font.size : 12          # controls default text sizes
-axes.titlesize : 18     # fontsize of the axes title
-axes.labelsize : 12     # fontsize of the x and y labels
-xtick.labelsize : 12    # fontsize of the tick labels
-ytick.labelsize : 12    # fontsize of the tick labels
-legend.fontsize : 12    # legend fontsize
-figure.titlesize : 18   # fontsize of the figure title
