@@ -12,12 +12,12 @@ import matplotlib.colors as mcolors
 from matplotlib import cm   
 import matplotlib.cm as cmx
 from matplotlib import rc
-rc('text', usetex=True)
-rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
+# rc('text', usetex=True)
+# rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
 
-from src.helper import truncate_colormap
+import src.helper
 
-def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, snig=False):
+def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False):
     """This functions performs a nulspace normalization of regression coefficents.
     The problem is set up such that the L2 norm differences between ther regression 
     coefficients is minimzed.
@@ -37,8 +37,6 @@ def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, sni
         1D array of penalizations of deviations form the nulspace vector
     comp_block : bool, default=False
         Use component block method
-    snig: bool, default=False
-        Sniggel penelization via Toeplitz matrix
 
     Returns 
     ----------
@@ -103,30 +101,39 @@ def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False, sni
     # c1 = np.concatenate((np.array([1, -1]), np.zeros(points-2)))
     # E1 = toeplitz(r1, c1)
 
-    r2 = np.concatenate((np.array([-1, 0, 0]), np.zeros(points-5)))
-    c2 = np.concatenate((np.array([-1, 2, -1]), np.zeros(points-3)))
-    E2 = toeplitz(r2, c2)
+    # r2 = np.concatenate((np.array([-1, 0, 0]), np.zeros(points-5)))
+    # c2 = np.concatenate((np.array([-1, 2, -1]), np.zeros(points-3)))
+    # E2 = toeplitz(r2, c2)
     
     nb_gs = len(gs)
     v_ = np.zeros((nb_gs, shape[1]))
-    v_snig = np.zeros((nb_gs, shape[1]))
     norm_ = np.zeros(nb_gs)
-    norm_snig= np.zeros(nb_gs)
-    g2 = 1000
+    
+    # v_snig = np.zeros((nb_gs, shape[1]))
+    # norm_snig= np.zeros(nb_gs)
+    # g2 = 1000
     
     for i,g in enumerate(gs):
         v_[i,:] = -linalg.inv(g*X.T@X+I)@w
         norm_[i] = LA.norm(w_alpha+v_[i,:]-w_beta, 2)
-        if snig:
-            v_snig[i,:] = -linalg.inv(g*X.T@X+g2*E2.T@E2+I)@w 
-            norm_snig[i] = LA.norm(w_alpha+v_[i,:]-w_beta, 2)
-    if snig:   
-        return v, v_, v_snig, norm_, norm_snig, gs
-    else:
-        return v, v_, norm_, gs
+        # if snig:
+        #    v_snig[i,:] = -linalg.inv(g*X.T@X+g2*E2.T@E2+I)@w 
+        #    norm_snig[i] = LA.norm(w_alpha+v_[i,:]-w_beta, 2)
+    #if snig:   
+    #    return v, v_, v_snig, norm_, norm_snig, gs
+    #else:
+    
+    return v, v_, norm_, gs
 
+def find_gamma(gs, w_alpha, w_beta, X_, x, y_, mape): 
+    v, v_, norm_, gs = nullspace_correction(w_alpha, w_beta, X_, x, gs=gs, comp_block=False)
+    mape_reg = 100*mean_absolute_percentage_error(y_, X_@(w_alpha))  
+    mape_nulls = 100*mean_absolute_percentage_error(y_, X_@(w_alpha+v_.reshape(-1)))
+    return np.abs(mape_reg-mape_nulls)
 
-def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_name_alpha='', coef_name_beta='', return_fig=True):
+def plot_nullspace_correction(
+    w_alpha, w_beta, v, gs, X, x, y, name='', coef_name_alpha='', coef_name_beta='', return_fig=True, 
+    max_mape=-9999, max_gamma=-9999):
     """Plot the nullspace correction
 
     Parameters 
@@ -153,6 +160,11 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
         Description/label for coefficients beta
     return_fig : bool, default=True
         Indicatees whetehr function returns figure or not
+    max_mape : float, default=-9999
+        Maximum MAPE diff. that was allowed.
+    gamma : float, default=-9999
+        Gamma value correponding to maximum MAPE
+
 
     Returns
     -------
@@ -164,7 +176,7 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
     mape_vals = [
         100*mean_absolute_percentage_error(y, X@(w_alpha+v[-1,:])),
-        100*mean_absolute_percentage_error(y, X@(w_alpha+v[1,:]))]
+        100*mean_absolute_percentage_error(y, X@(w_alpha+v[0,:]))]
     mape_min = np.min(mape_vals)
     mape_max = np.max(mape_vals)
     cNorm  = mcolors.Normalize(vmin=mape_min, vmax=mape_max)
@@ -178,7 +190,7 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
     #     cNorm  = mcolors.Normalize(vmin=mape_min-eps, vmax=mape_max+eps)
     # cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
     
-    cmap = truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.7)
+    cmap = src.helper.truncate_colormap(cm.get_cmap('plasma'), 0.1, 0.7)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
 
     figsize = [11, 13]
@@ -207,16 +219,26 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
     mape_alpha = 100*mean_absolute_percentage_error(y, X@(w_alpha))
     mape_beta = 100*mean_absolute_percentage_error(y, X@(w_beta))
 
-    coef_alpha_label = f"{coef_name_alpha}, MAPE: {mape_alpha:.2f} \%"
-    coef_beta_label = f"{coef_name_beta}, MAPE: {mape_beta:.2f} \%"
+    coef_alpha_label = f"{coef_name_alpha}, MAPE: {mape_alpha:.2f} %"
+    coef_beta_label = f"{coef_name_beta}, MAPE: {mape_beta:.2f} %"
     ax[1].plot(x, w_alpha, label=coef_alpha_label, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5, zorder=v.shape[0]+1)   
     ax[1].plot(x, w_beta, label=coef_beta_label, color='k', linewidth=2.5, zorder=v.shape[0]+1)
-    
+
     # ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
-    ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=r'Appr. contained in $\mathcal{\mathbf{N}}(X)$')
+    if max_mape <= 0.01:
+        if max_mape <= 10**(-8):
+            label=r'$\in \mathcal{\mathbf{N}}(X)$ enlarged by 0.00% MAPE'
+        else:
+            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.1e}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + f'{max_gamma:.2f}'
+    else:
+        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.2f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + f'{max_gamma:.2f}'
+
+    ax[1].fill_between(
+        x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=label)
+            
     
     ax[1].set_xlabel('x values')
-    ax[1].set_ylabel(r'Regression Coefficients $(\bm\beta)$')
+    ax[1].set_ylabel(r'Regression Coefficients $(\beta)$')
 
     # Set bottom and left spines as x and y axes of coordinate system
     y_min = ax[1].get_ylim()[0]
@@ -227,12 +249,13 @@ def plot_nullspace_correction(w_alpha, w_beta, v, gs, X, x, y, name='', coef_nam
     ax[0].set_xlim(min(x), max(x))
     ax[1].set_ylim(y_min, y_max)
     ax[1].set_title('Nullspace Perspective')
+
     cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), 
-                          ax=ax[1], pad=0.01)
- 
+                        ax=ax[1], pad=0.01)
+
     # cb.set_label(r'$\ln(\gamma)$', labelpad=10)
     # cb.set_label(r'MAPE($\mathbf{X}\boldsymbol{\beta}_{a+v(\gamma)}, \mathbf{X}\boldsymbol{\beta}_a$)', labelpad=10)
-    cb.set_label(r'MAPE (\%)', labelpad=10)
+    cb.set_label(r'MAPE (%)', labelpad=10)
 
     ax[0].grid()    
     ax[1].grid()

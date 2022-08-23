@@ -127,6 +127,91 @@ def plot_stats(ax, x, X, c1, c2, c3, labelx, labely):
     ax.set_ylabel(labely)
     return ax 
 
+def linearization_regeression_row_plots(
+    X, x, y, fun, axs, cmap, model_dict, color_dict, label_dict,
+    nullspace_corr=True, plot_nullspace=False):
+    '''
+    '''
+    from src.src_lin_feature import plot_linearized_nonlinear_comp
+    from src.src_lin_feature import plot_pearson_corr_coef_comp
+    from sklearn.metrics import mean_absolute_percentage_error
+    import src.basis as basis
+
+    model_names = model_dict['model_names']
+    models = model_dict['models']
+    color_list = color_dict['color_list']
+    marker_list = color_dict['marker_list']
+    x_label = label_dict['xlabel']
+    # Mean
+    x_hat, lin_coef_, lin_const_coef = regress_linearized_coeff(X, y, fun)
+    mape_linfeat = 100*mean_absolute_percentage_error(y, X@(lin_coef_.reshape(-1)))
+    axs[0].plot(x, lin_coef_.reshape(-1), label='Linearized Weights' +f" MAPE: {mape_linfeat:.2f} %", lw=2.5, color=color_list[0], marker=marker_list[0], markevery=(0, 30),  markersize=9)
+
+    # PLS with one and two components is always a good idea to get a better understanding
+    for j, model in enumerate(models):
+        reg = model.fit(X-np.mean(X, axis=0), y-y.mean())
+        mape_reg = 100*mean_absolute_percentage_error(y, X@(reg.coef_.reshape(-1)))
+
+        axs[0].plot(
+            x, reg.coef_.reshape(-1), label=f"{model_names[j]}, MAPE: {mape_reg:.2f} %", lw=2.5, 
+            color=color_list[np.mod(j+1, len(color_list))], 
+            marker=marker_list[np.mod(j+1, len(marker_list))], 
+            markevery=(5*(j+1), 30), markersize=9)
+    axs[0].set_ylabel(r'$\beta$')
+    axs[0].set_xlabel(x_label)
+    axs[0].set_xlim([2.0, 3.5])
+
+    if nullspace_corr: 
+        # Create Nullspace object
+        lfp_ygt = basis.SynMLData(None, None).place_X_y(X, x, y)
+        # Train the model with the regression coeficients that shall be testes
+        lfp_ygt.learn_weights(models[-1], model_names[-1])
+        # do the nullspace stuff
+        if plot_nullspace:
+            lfp_ygt, fig, ax = lfp_ygt.nullspace_correction(
+                key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
+                w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
+                plot_results=True, save_plot=0)
+        else: 
+            lfp_ygt = lfp_ygt.nullspace_correction(
+                key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
+                w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
+                plot_results=False, save_plot=0)
+
+        y2 = lfp_ygt.nullsp['w_alpha']+lfp_ygt.nullsp['v_'][-1,:]
+
+        axs[0].fill_between(
+            x, lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', 
+            zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
+        axs[0].legend(loc=3)
+
+
+    # Middle: Non-linearity check
+    # How good is the linear approximation:
+
+    # Calculate the linear feature for all the rows
+    feat_nonlin = np.zeros(len(X))
+    a = np.mean(X, axis=0)
+    fun_a = fun(a)
+
+    # Regress the linear
+
+    for j in range(len(X)):
+        # np.dot: If both a and b are 1-D arrays, it is inner product of vectors (without complex conjugation).
+        feat_nonlin[j] = fun(X[j, :])
+
+    # Throw it all into a plotter
+    plot_linearized_nonlinear_comp(feat_nonlin, x_hat, y, fun_a,
+                            cmap=cmap, 
+                            title='', xlabel='Linearized Feature', ylabel='Feature', 
+                            ax=axs[1])
+
+    # Right: Pearson correlation coefficient
+    plot_pearson_corr_coef_comp(feat_nonlin,  y, cmap,
+                                title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[2])
+
+    return axs
+
 @mpl.rc_context(fname='./styles/linearization_plot.mplstyle')
 def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_names, plot_labels, cmap=sns.color_palette("icefire", as_cmap=True), show=True):
     ''' Function to create plot of data and regression coefficients
@@ -154,7 +239,7 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
     # 0, 1: Column correlations 
     axs[0, 1] = plot_corrheatmap(axs[0, 1], x, X, cmap, plot_labels['xdata_label'], plot_labels['xdata_label'], '|Corr.| Columns')
     # 0, 2: Row correlations
-    axs[0, 2] = plot_corrheatmap(axs[0, 2], np.arange(X.T.shape[1]), X.T, cmap, plot_labels['row_label'], plot_labels['row_label'], '|Corr.| Rows')
+    axs[0, 2] = plot_corrheatmap(axs[0, 2], np.arange(X.T.shape[1]), X.T, cmap, plot_labels['row_label'], plot_labels['row_label'], '|Corr.| Rows', cols=False)
     # 1, 0: Mean & std of data
     axs[1, 0] =plot_stats(axs[1, 0], x, X, color_list[0], color_list[1], color_list[2], plot_labels['xdata_label'], plot_labels['ydata_label'])
     
@@ -175,46 +260,12 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
         except: 
             y_train = y
 
-        x_hat, lin_coef_, lin_const_coef = regress_linearized_coeff(X, y_train, fun_targetj[i])
-        axs[i+2, 0].plot(x, lin_coef_.reshape(-1), label=r'$\beta_{Lin}$', lw=2.5, color=color_list[0], marker=marker_list[0], markevery=(0, 30),  markersize=9)
-        for j, model in enumerate(models):
-            reg = model.fit(X-np.mean(X, axis=0), y_train-y_train.mean())
-            axs[i+2, 0].plot(
-                x, reg.coef_.reshape(-1), label=model_names[j], lw=2.5, 
-                color=color_list[np.mod(j+1, len(color_list))], 
-                marker=marker_list[np.mod(j+1, len(marker_list))], 
-                markevery=(5*(j+1), 30), markersize=9)
-            
-        axs[i+2, 0].legend(loc=2)
-        axs[i+2, 0].set_ylabel(r'$\beta$')
-        axs[i+2, 0].set_xlabel(plot_labels['xdata_label'])
-        # axs[i+2, 0].set_title(fun_target_names[i]+' Feature')
-
-        # Middle: Non-linearity check
-        # How good is the linear approximation:
-
-        # Calculate the linear feature for all the rows
-        feat_nonlin = np.zeros(len(X))
-        a = np.mean(X, axis=0)
-        fun_a = fun_targetj[i](a)
-
-        # Regress the linear
-
-        for j in range(len(X)):
-            # np.dot: If both a and b are 1-D arrays, it is inner product of vectors (without complex conjugation).
-            feat_nonlin[j] = fun_targetj[i](X[j, :])
-        
-        # Throw it all into a plotter
-        plot_linearized_nonlinear_comp(feat_nonlin, x_hat, y_train, fun_a,
-                                cmap=cmap, 
-                                title=fun_target_names[i]+' Feature', xlabel='Linearized Feature', ylabel='Feature', 
-                                ax=axs[i+2, 1])
-
-        # Right: Pearson correlation coefficient
-        plot_pearson_corr_coef_comp(feat_nonlin,  y_train, cmap,
-                                 title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[i+2, 2])
-
-    
+        model_dict = {'models': models, 'model_names': model_names}
+        color_dict = {'color_list': color_list, 'marker_list': marker_list}
+        label_dict = {'xlabel': 'Voltage (V)'}
+        linearization_regeression_row_plots(
+            X, x, y_train, fun_targetj[i], axs[i+2, :], cmap, model_dict, color_dict, label_dict,
+            nullspace_corr=True, plot_nullspace=False)
 
     pad = 30 # in points
 
@@ -280,7 +331,7 @@ def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
     return np.array(X), x
 
 
-def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1]):
+def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1], snr=-1):
     '''This function takes the wide data matix X as an input and generates target function values y based on the defined functions
     X: \in R^mxn with n>>m (wide data matrix, used as input for the targetfunction y
     targetfun: Underlying relationship between X and y. This can be any function from R^n -> R^1
@@ -297,5 +348,18 @@ def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1]):
         low_ind = int(percentage_range_x_to_t[0]*columns)
         high_ind = int(percentage_range_x_to_t[1]*columns)
         y[i] = targetfun(row_i[low_ind:high_ind])
-    
+
+    if snr>0:
+        for i, yi in enumerate(y): 
+            sig_avg_watts = np.mean(yi**2)
+            sig_avg_db = 10 * np.log10(sig_avg_watts)
+            # Calculate noise according to [2] then convert to watts
+            noise_avg_db = sig_avg_db - snr
+            noise_avg_watts = 10 ** (noise_avg_db / 10)
+            # Generate an sample of white noise
+            mean_noise = 0
+            noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), 1)
+            # Noise up the original signal
+            y[i] += noise
     return y
+

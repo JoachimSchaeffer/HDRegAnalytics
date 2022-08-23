@@ -4,9 +4,12 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 from sklearn.cross_decomposition import PLSRegression
+from sklearn.linear_model import Ridge
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
+
+from sklearn.metrics import mean_absolute_percentage_error
 
 import src.basis as basis
 import src.nullspace
@@ -123,10 +126,10 @@ def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, std=False):
     max_exp = np.floor(np.log10(int((10**2)*y_range)))
     gs  = np.logspace(min_exp, max_exp, 30)
     gs = np.append(gs, [int((10**2)*y_range)])
-    return src.nullspace.nullspace_correction(w_alpha, w_beta, X, x, gs=gs, comp_block=0, snig=0)
+    return src.nullspace.nullspace_correction(w_alpha, w_beta, X, x, gs=gs, comp_block=0)
 
 
-def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=False):
+def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=False, min_distance_search=False, featlin=[]):
     """Crossvalidation of PLS algorithm and plotting of results. 
     
     Parameters
@@ -155,7 +158,7 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
     components = np.arange(1, max_comps + 1).astype('uint8')
     rmse = np.zeros((len(components), ))
     stds = np.zeros((len(components), ))
-    
+    l2_distance = np.zeros((len(components), ))
     if std: 
         X = StandardScaler().fit_transform(X)
 
@@ -173,11 +176,20 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
         scores = cross_val_score(pls, X, y, cv=folds, n_jobs=-1, scoring='neg_mean_squared_error')
         rmse[comp - 1] = -scores.mean()
         stds[comp - 1] = scores.std()
+        if min_distance_search: 
+            # Find the PLS vector that has minimal L2 distance to the featlin vector.
+            # Comparing these two vector can subsequently tell us, whether we're close and the feature should be considered or not.
+            reg = pls.fit(X-np.mean(X, axis=0), y-y.mean())
+            diff_vec = featlin-reg.coef_.reshape(-1)
+            l2_distance[comp - 1] = np.linalg.norm(diff_vec, 1)
+    
+    if min_distance_search: 
+        l2_min_loc = np.argmin(l2_distance)
 
     rmsemin_loc = np.argmin(rmse)
     # Minimum number of componets where rms is still < rmse[rmsemin_loc]+stds[rmsemin_loc]
     
-    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+stds[rmsemin_loc]]
+    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+(1*stds[rmsemin_loc])]
     rmse_std_min, _ = min(filtered_lst)
     if plot_components is True:
         with plt.style.context(('ggplot')):
@@ -186,8 +198,9 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
             ax.plot(components, rmse-stds, color = 'k', label='Mean RMSE - 1 std')
             ax.plot(components, rmse+stds, color = 'k', label='Mean RMSE + 1 std')
             ax.plot(components[rmsemin_loc], rmse[rmsemin_loc], 'P', ms=10, mfc='red', label='Lowest RMSE')
-            ax.plot(components[rmse_std_min], rmse[rmse_std_min], 'P', ms=10, mfc='green', label='Within 1 std of best numebr of comp.')
-            
+            ax.plot(components[rmse_std_min], rmse[rmse_std_min], 'P', ms=10, mfc='green', label='Within 2 std of best numebr of comp.')
+            if min_distance_search: 
+                ax.plot(components[l2_min_loc], rmse[l2_min_loc], 'P', ms=10, mfc='black', label='Smallest L1 distance to passed feature')
             ax.set_xticks(components)
             ax.set_xlabel('Number of PLS components')
             ax.set_ylabel('RMSE')
@@ -195,7 +208,91 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
             ax.set_xlim(left=0.5)
             ax.legend()
     
-    return rmse, components
+    res_dict = {
+        'rmse_vals': rmse, 'components': components, 'rmse_std_min': rmse_std_min, 
+        'l2_distance': np.array(l2_distance)}
+    return res_dict
+
+def optimize_regcoef_mape(model, X, y, regularization_limits, mape_error, max_depth=5): 
+    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired MAPE error.
+    As of now, only PLS regression or ridge regression are implemented. 
+    This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
+    in the case of ridge regression in 10 gemetrically spaced values between the regularization limits.
+    '''
+    if model=='PLS': 
+        # Start with highest regularization and decrease by step of 1.
+        if type(regularization_limits[0]) != int:
+            raise TypeError('If PLS is the model, the upper regularization error must be integer!')
+        for i in range(regularization_limits[0]):
+            model = PLSRegression(n_components=i+1, tol=1e-7, scale=False)
+            model.fit(X-np.mean(X, axis=0), y-y.mean())
+            pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
+            if pred_error <= mape_error:
+                break
+        reg = i
+    elif model=='ridge':
+        alphas = np.geomspace(regularization_limits[0], regularization_limits[1], num=11)
+        for i in range(max_depth):
+            for i, alpha in enumerate(alphas):
+                model = Ridge(alpha=alpha)
+                model.fit(X-np.mean(X, axis=0), y-y.mean())
+                pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
+                if pred_error <= mape_error:
+                    break
+            alphas = np.geomspace(alphas[i-1], alpha, num=11)
+        reg = alpha
+    else: 
+        raise ValueError('Not Implemented')
+    return reg
+
+def optimize_regcoef_dist(model, X, y, regularization_limits, lin_coef_, norm=1, max_depth=5): 
+    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired MAPE error.
+    As of now, only PLS regression or ridge regression are implemented. 
+    This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
+    in the case of ridge regression in 10 gemetrically spaced values between the regularization limits.
+    '''
+    if model=='PLS': 
+        # Start with highest regularization and decrease by step of 1.
+        if type(regularization_limits[0]) != int:
+            raise TypeError('If PLS is the model, the upper regularization error must be integer!')
+        norms = np.full((regularization_limits[0]), np.inf)
+        for i in range(regularization_limits[0]):
+            model = PLSRegression(n_components=i+1, tol=1e-7, scale=False)
+            model.fit(X-np.mean(X, axis=0), y-y.mean())
+            norm_i = np.linalg.norm(lin_coef_-model.coef_.reshape(-1), norm)
+            if norm_i <= np.min(norms):
+                reg = i+1
+            norms[i] = norm_i
+    elif model=='ridge':
+        # While PLS is very easy, due to the low amount of regularization parameters, things get more complicated with PLS
+        # We will be stepwise refining the grid, by taking the two smallest distnaces and then go down until the list is exhausted.
+        alphas = np.geomspace(regularization_limits[0], regularization_limits[1], num=11)
+        for i in range(max_depth):
+            norms = np.full(len(alphas), np.inf)
+            for i, alpha in enumerate(alphas):
+                model = Ridge(alpha=alpha)
+                model.fit(X-np.mean(X, axis=0), y-y.mean())
+                norm_i = np.linalg.norm(lin_coef_-(model.coef_.reshape(-1)), norm)
+                if norm_i <= np.min(norms):
+                    reg = alpha
+                norms[i] = norm_i
+            # plt.plot(alphas, norms)
+            # plt.show()
+            sorted_norms = np.sort(norms)
+            try:
+                alpha_min = alphas[np.where(norms==sorted_norms[0])[0][0]-2]
+            except:
+                alpha_min = alphas[np.where(norms==sorted_norms[0])[0][0]]
+            # Making it more robust to look into a space that is a bit larger than just between the wo best values. 
+            try:
+                alpha_min3 = alphas[np.where(norms==sorted_norms[1])[0][0]+2]
+            except:
+                alpha_min3 = alphas[np.where(norms==sorted_norms[3])[0][0]]
+            alphas = np.geomspace(alpha_min, alpha_min3, num=15)
+ 
+    else: 
+        raise ValueError('Not Implemented')
+    return reg
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
