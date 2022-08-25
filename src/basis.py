@@ -302,7 +302,7 @@ class SynMLData(Basis):
             mape_diff = np.zeros(len(gammas))
             depth=3
             for i in range(depth):
-                print(i)
+                # print(i)
                 for j, gamma in enumerate(gammas): 
                     mape_diff[j] = find_gamma(
                         [gamma], self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, self.max_mape)

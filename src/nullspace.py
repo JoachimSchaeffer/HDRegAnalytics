@@ -225,13 +225,18 @@ def plot_nullspace_correction(
     ax[1].plot(x, w_beta, label=coef_beta_label, color='k', linewidth=2.5, zorder=v.shape[0]+1)
 
     # ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
+    if max_gamma < 0.01:
+        g_str = f'{max_gamma:.3f}'
+    else: 
+        g_str = f'{max_gamma:.2f}'
+    
     if max_mape <= 0.01:
         if max_mape <= 10**(-8):
             label=r'$\in \mathcal{\mathbf{N}}(X)$ enlarged by 0.00% MAPE'
         else:
-            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.1e}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + f'{max_gamma:.2f}'
+            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.3f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
     else:
-        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.2f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + f'{max_gamma:.2f}'
+        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.2f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
 
     ax[1].fill_between(
         x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=label)
