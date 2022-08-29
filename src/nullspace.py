@@ -17,6 +17,240 @@ from matplotlib import rc
 
 import src.helper
 
+       
+class Nullspace():
+    """Synthethic Machine Learning Data class. this class inherits from basis (takes Phi and X from basis)
+    This class can generate response variables (y).
+    """
+    def __init__(self, data, **kwargs):
+        self.std = None
+        self.weights = {}                 # Dictionary to store weights learned from mean subtracted data X_
+        self.nullsp = {}
+        self.data = data                  # Should be a BasicsCalss object or duck type
+        self.max_mape = None
+        self.max_gamma = None
+    
+    def learn_weights(self, models, string_id):
+        """Learn weights from data and sotre them in the dictionary. 
+
+        Parameters
+        ----------
+        model : object
+            sklearn model object with methods fit(), predict() (e.g. sklearn)
+            for custom models you might want to write a wrapper
+        string_id : str
+            model description string
+        """
+        for i, model in enumerate(models):
+
+            reg = model.fit(self.data.X_, self.data.y_)
+            coef = reg.coef_.reshape(-1)
+            self.weights[string_id[i]] = coef
+        
+            # For some synthethic data std might be 0 -> Standardization not possible!
+            try:
+                reg_std = model.fit(self.data.X_std, self.data.y_)
+                coef_std = reg_std.coef_.reshape(-1)
+                self.weights[string_id[i] + ' std'] = coef_std
+                self.weights[string_id[i] + ' std retrans'] = coef_std/self.data.stdx
+            except:
+                self.weights[string_id[i] + ' std'] = 'Undefined Std = 0 for some column'
+                self.weights[string_id[i] + ' std retrans'] = 'Undefined Std = 0 ofr some column'
+        return self
+    
+    def nullspace_correction(
+        self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, max_mape=-0.5,
+        plot_results=False, save_plot=False, path_save='', file_name='', **kwargs):
+        """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.
+
+        Parameters
+        ----------
+        w_alpha : ndarray
+            Regression coefficients obtained with method alpha
+        w_beta : ndarray
+            Regression coefficients obtained with method beta
+        data_ml_obj : obj 
+            Object from SynMLData class
+        std : bool, default=False
+            Indicate whether Standardization(Z-Scoring) shall be performed. 
+            If yes, use X_std of the data_ml_object, if not use X.
+        max_mape : int, default 1
+            Tolerable MAPE error, to be considered ``close'' to the nullspace. 
+            Set this parameter with care, based on how much deviation from the 
+            nullspace you want to tolerate as ``insignificant''
+            -1: Take np.abs(max_mape) times the difference between the prediction errors
+        plot_results : bool, default=False
+            Indicate whether to plot results
+        save_results : bool, default=False
+            indicate whether to save plot as pdf
+        path_save : str, default=''
+            path for the case save resutls is true
+        fig_name : str, defautl=''
+            figure file name
+
+        Returns
+        -------
+        self
+
+        depending on whether plot_results is true
+        fig : object
+            matplotlib figure object
+        ax : object 
+            matplotlib axis objects
+        """
+
+        if (w_alpha is None) & ('key_alpha' not in kwargs):
+            NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
+
+        if (w_beta is None) & ('key_beta' not in kwargs):
+            NameError('Either w_alpha is passed directly or key for learned coefficients must be passed')
+    
+        self.nullsp['w_beta_name'] = w_beta_name
+        self.nullsp['w_alpha_name'] = w_alpha_name
+
+        # To keep things simple, standardized weights also included here! 
+        # In case std==False this is not efficient, because the standardized coef. aren't used. 
+        # But it's easier to understand and less verbose. 
+        if w_alpha is None:
+            self.nullsp['w_alpha'] = self.weights[kwargs.get('key_alpha')]
+            self.nullsp['w_alpha_std'] = self.weights[kwargs.get('key_alpha') + ' std']
+        else:
+            self.nullsp['w_alpha'] = w_alpha
+            self.nullsp['w_alpha_std'] = w_alpha * self.data.stdx
+
+        if w_beta is None:
+            self.nullsp['w_beta'] = self.weights[kwargs.get('key_beta')]
+            self.nullsp['w_beta_std'] = self.weights[kwargs.get('key_beta') + ' std']
+        else:
+            self.nullsp['w_beta'] = w_beta
+            self.nullsp['w_beta_std'] = w_beta * self.data.stdx
+
+        if std: 
+            X = self.data.X_std
+            self.nullsp['w_alpha_name'] += ' std'
+            self.nullsp['w_beta_name'] += ' std'
+            key_alpha = 'w_alpha_std'
+            key_beta = 'w_beta_std'
+        else:
+            X = self.data.X_
+            key_alpha = 'w_alpha'
+            key_beta = 'w_beta'
+            
+        x = self.data.x
+        self.nullsp['info'] = ''
+
+        if 'nb_gammas' in kwargs:
+            nb_gammas = kwargs.get('nb_gammas')
+        else:
+            nb_gammas = 30
+
+        y_ = self.data.y_
+
+        # Simple approach to set gamma
+        # y_range = np.max(y_) - np.min(y_)
+        # min_exp = -5
+        # max_exp = np.floor(np.log10(int((10**2)*y_range)))
+
+        # gamma_vals = np.geomspace(10**(-5), (10**2)*y_range, nb_gammas)
+        # gamma_vals  = np.logspace(min_exp, max_exp, nb_gammas)
+        # gamma_vals = np.append(gamma_vals, [int((10**2)*y_range)])
+        
+        mape_alpha = 100*mean_absolute_percentage_error(y_, X@(self.nullsp[key_alpha]))  
+        mape_beta = 100*mean_absolute_percentage_error(y_, X@(self.nullsp[key_beta]))
+        if max_mape < 0:
+            self.max_mape = np.abs(max_mape) * np.abs(mape_alpha-mape_beta)
+        else: 
+            self.max_mape = max_mape
+
+        if np.abs(mape_alpha-mape_beta) > self.max_mape:
+            # Find largest value for gamma that is not modifying the resutls more than max_mape. 
+            # The issue is that this problem is not necessarily convex and the optimizer get stuck in local optima.
+            # This is a simple way of optimizing which should suffice for this issue.
+            nb_gammas=8
+            gammas = np.append([0], np.geomspace(1, 10**10, nb_gammas))
+            mape_diff = np.zeros(len(gammas))
+            depth=3
+            for i in range(depth):
+                # print(i)
+                for j, gamma in enumerate(gammas): 
+                    mape_diff[j] = find_gamma(
+                        [gamma], self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, self.max_mape)
+                    if mape_diff[j] < self.max_mape: 
+                        break
+                if j==0:
+                    break
+                else:
+                    if gammas[j-1]==0:
+                        gammas = np.append([0], np.geomspace(10**(-12), gammas[j], nb_gammas))
+                    else:
+                        gammas=np.geomspace(gammas[j-1], gammas[j], nb_gammas)
+            self.max_gamma = gamma
+
+            # y_range = np.max(y_) - np.min(y_)
+            # gs_inital = 100*y_range
+            # Find value for gamma that 
+            # gamma_upper_limit = scipy.optimize.minimize(
+            #     find_gamma, gs_inital, args=(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, max_mape),
+            #     tol=0.01, method='Nelder-Mead', bounds=[(0, 10**10)])
+            # max_gamma = gamma_upper_limit.x[0]
+
+            print(f'Gamma value corresponding to MAPE={self.max_mape:.2f} % is {self.max_gamma}')
+
+            if self.max_gamma < 10**(-12):
+                gamma_vals = self.max_gamma
+            else: 
+                gamma_vals = np.geomspace(10**(-12), self.max_gamma+2*(10**(-12)), 30)
+
+            self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = nullspace_correction(
+                self.nullsp[key_alpha], self.nullsp[key_beta], X, x, gs=gamma_vals, comp_block=0)
+        else:
+            self.nullsp['v'] = np.array([self.nullsp[key_beta]-self.nullsp[key_alpha]])
+            self.nullsp['v_'] = np.array(self.nullsp[key_beta]-[self.nullsp[key_alpha]])
+            self.nullsp['gamma'] = 0 
+            self.max_gamma = np.inf
+
+        if plot_results:
+            fig, ax = self.plot_nullspace_correction(std=std)
+            if save_plot:
+                fig.savefig(path_save + file_name)
+            return self, fig, ax 
+        else:
+            return self
+
+    def plot_nullspace_correction(self, std=False, title=''):
+        """Method that calls plot_nullspace_correction, uses basis object.
+
+        Parameters
+        ----------
+        title : str 
+            Suptitle of the resulting figure
+        std : bool, default=False
+            Indicate whether Standardization(Z-Scoring) shall be performed. 
+            If yes, use X_std of the data_ml_object, if not use X.
+
+        Returns
+        -------
+        fig : object
+            matplotlib figure object
+        ax : object 
+            matplotlib axis objects
+        """
+        if std: 
+            X = self.data.X_std
+            w_alpha = self.nullsp['w_alpha_std']
+            w_beta = self.nullsp['w_beta_std']
+        else: 
+            X = self.data.X_
+            w_alpha = self.nullsp['w_alpha']
+            w_beta = self.nullsp['w_beta']
+        fig, ax = plot_nullspace_correction(
+                w_alpha, w_beta, self.nullsp['v_'], self.nullsp['gamma'],
+                X, self.data.x, self.data.y_, name=title, 
+                coef_name_alpha=self.nullsp['w_alpha_name'], coef_name_beta=self.nullsp['w_beta_name'], 
+                max_mape=self.max_mape, max_gamma=self.max_gamma)
+        return fig, ax
+    
+
 def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False):
     """This functions performs a nulspace normalization of regression coefficents.
     The problem is set up such that the L2 norm differences between ther regression 
@@ -131,6 +365,24 @@ def find_gamma(gs, w_alpha, w_beta, X_, x, y_, mape):
     mape_nulls = 100*mean_absolute_percentage_error(y_, X_@(w_alpha+v_.reshape(-1)))
     return np.abs(mape_reg-mape_nulls)
 
+def format_label(max_gamma, max_mape):
+    """Helps with label formatting for the nullspace!
+    """
+    if max_gamma < 0.01:
+        g_str = f'{max_gamma:.3f}'
+    else: 
+        g_str = f'{max_gamma:.2f}'
+    
+    if max_mape <= 0.01:
+        if max_mape <= 10**(-8):
+            label=r'$\in \mathcal{\mathbf{N}}(X)$ enlarged by 0.00% MAPE'
+        else:
+            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.3f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
+    else:
+        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.2f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
+
+    return label
+
 def plot_nullspace_correction(
     w_alpha, w_beta, v, gs, X, x, y, name='', coef_name_alpha='', coef_name_beta='', return_fig=True, 
     max_mape=-9999, max_gamma=-9999):
@@ -171,7 +423,6 @@ def plot_nullspace_correction(
     fig : object
         matplotlib figure object
     ax : object 
-
     """
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
     mape_vals = [
@@ -230,13 +481,7 @@ def plot_nullspace_correction(
     else: 
         g_str = f'{max_gamma:.2f}'
     
-    if max_mape <= 0.01:
-        if max_mape <= 10**(-8):
-            label=r'$\in \mathcal{\mathbf{N}}(X)$ enlarged by 0.00% MAPE'
-        else:
-            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.3f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
-    else:
-        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_mape:.2f}% MAPE' + '\n Corresponding ' + r'$\gamma=$' + g_str
+    label = format_label(max_gamma, max_mape)
 
     ax[1].fill_between(
         x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], color='darkgrey', zorder=-1, alpha=0.8, label=label)

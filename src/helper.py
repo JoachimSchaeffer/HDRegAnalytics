@@ -17,7 +17,7 @@ import src.nullspace
 
 # Helper functions for this notebook
 def construct_data(x_min, x_max, basis_function,  
-                        mean_params, stdv_params, objtype='data',
+                        mean_params, stdv_params,
                         num_datapoints=50, draws=10, plot_results=False): 
     """Build an object of the basis class based on the passed parameters and return the basis object.
 
@@ -34,8 +34,6 @@ def construct_data(x_min, x_max, basis_function,
         The random parameters are drawn from normal distribution.
     stdv_params : ndarray of shape (n_params for basis function)
         Array of standarddeviations of random paramters that are used by the basis functions.
-    objtype: str, default='data'
-        'data' will initialize from the simple data class, 'mldata' from the mldataclass including an objective y.
     num_datapoints : int, default=50
         Number of linearly spaced datapoints that will range from x_min to x_max
     draws : int, default=10
@@ -56,12 +54,7 @@ def construct_data(x_min, x_max, basis_function,
     """
     num_basis = len(mean_params)
     x = np.linspace(x_min, x_max, num_datapoints)[:, None]
-    if objtype=='data':
-        obj = basis.Basis(basis_function, num_basis).Phi(x)
-    elif objtype=='mldata':
-        obj = basis.SynMLData(basis_function, num_basis).Phi(x)
-    else:
-        ValueError(f'You entered {objtype}, which does not correspond to an implemented option.')
+    obj = basis.BasicsData(basis_function, num_basis).Phi(x)
 
     # Draw the parameters for the matrix
     # m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
@@ -188,17 +181,18 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
 
     rmsemin_loc = np.argmin(rmse)
     # Minimum number of componets where rms is still < rmse[rmsemin_loc]+stds[rmsemin_loc]
-    
-    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+(1*stds[rmsemin_loc])]
+    nb_stds = 1 
+
+    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+(nb_stds*stds[rmsemin_loc])]
     rmse_std_min, _ = min(filtered_lst)
     if plot_components is True:
         with plt.style.context(('ggplot')):
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=(9,6))
             ax.plot(components, rmse, '-o', color = 'blue', mfc='blue', label='Mean RMSE')
             ax.plot(components, rmse-stds, color = 'k', label='Mean RMSE - 1 std')
             ax.plot(components, rmse+stds, color = 'k', label='Mean RMSE + 1 std')
             ax.plot(components[rmsemin_loc], rmse[rmsemin_loc], 'P', ms=10, mfc='red', label='Lowest RMSE')
-            ax.plot(components[rmse_std_min], rmse[rmse_std_min], 'P', ms=10, mfc='green', label='Within 2 std of best numebr of comp.')
+            ax.plot(components[rmse_std_min], rmse[rmse_std_min], 'P', ms=10, mfc='green', label=f'Within {nb_stds} std of best numebr of comp.')
             if min_distance_search: 
                 ax.plot(components[l2_min_loc], rmse[l2_min_loc], 'P', ms=10, mfc='black', label='Smallest L1 distance to passed feature')
             ax.set_xticks(components)

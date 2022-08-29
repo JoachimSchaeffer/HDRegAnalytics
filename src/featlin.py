@@ -1,8 +1,8 @@
-'''
+"""
 Featue Linearization Methodology
 Fuctions to linearize nonlinear features and 
 Subsequently finding a constant term via regeression to match the metdoch
-'''
+"""
 
 # Packages
 from matplotlib import markers
@@ -27,9 +27,57 @@ from jax import grad
 from jax import jacfwd
 
 
+class featlin(): 
+    """Class that performs feature linearization, compariosn and potentially selection.
+    By choice we decided not to inherit other classes in here, but instead realy on composition.
+    """
+    def __init__(self, X, y, feat_funcs):
+        self.X = X
+        self.mean_x = np.mean(self.X, axis=0)
+        self.X_ = self.X - self.mean_x
+        self.std_x = np.std(self.X, axis=0)
+        self.X_std = self.X_/self.std_x
+        
+        self.y = y
+        self.mean_y = np.mean(self.y)
+        self.y_ = self.y - self.mean_y
+        self.std_y = np.std(self.y)
+        self.y_std = self.y_/self.std_y
+
+        self.feat_funcs = feat_funcs
+        self.metric = []                # Metric that shall be used for 
+        self.max_metric = None          # Maximum value of metric that is still considered close to the nullspace
+
+        self.nullspace_res_dict = {}    # Filling with results of the runs, nullspace vectors etc.
+
+        self.results = {}               # Filling with fresults from the run. Overview!
+
+    def construct_y_data(self, response_trans):
+        """Construct responsese
+                
+        Parameters
+        ----------
+        response_trans : callable
+            function that transforms X to y
+        """
+        self.y = response_trans(self.X)
+        return self
+        
+    def fit_nullspace(self, plot=0):
+
+        for feat in self.feat_funcs: 
+            pass
+        return self 
+    
+    def plot_feat_nullspace_run(self): 
+        return self
+
+
+
+
 def regress_linearized_coeff(X_train, y_train, fun):
-    '''Estimation of m and b via OLS regression.
-    '''
+    """Estimation of m and b via OLS regression.
+    """
     x_hat = np.zeros(len(X_train))
     a = np.mean(X_train, axis=0)
     gradient = jacfwd(fun)
@@ -48,10 +96,10 @@ def regress_linearized_coeff(X_train, y_train, fun):
     return x_hat, np.array(linearized_coef), np.array(linearized_const_coef)
 
 def jax_moment(X, power): 
-    '''rewriting the sample moment without prefactor! 1/n
+    """rewriting the sample moment without prefactor! 1/n
     operating on a single row of a matrix
     using jax impolemtations to allow for autodifferentiation
-    '''
+    """
     X_tilde = jnp.array(X) - jnp.mean(X)
     if len(X.shape)==2:
         shape = X.shape[1]
@@ -129,9 +177,9 @@ def plot_stats(ax, x, X, c1, c2, c3, labelx, labely):
 
 def linearization_regeression_row_plots(
     X, x, y, fun, axs, cmap, model_dict, color_dict, label_dict,
-    nullspace_corr=True, plot_nullspace=False):
-    '''
-    '''
+    nullspace_corr=True, plot_nullspace_bool=False, max_mape=-0.5):
+    """
+    """
     from src.src_lin_feature import plot_linearized_nonlinear_comp
     from src.src_lin_feature import plot_pearson_corr_coef_comp
     from sklearn.metrics import mean_absolute_percentage_error
@@ -167,22 +215,29 @@ def linearization_regeression_row_plots(
         # Train the model with the regression coeficients that shall be testes
         lfp_ygt.learn_weights(models[-1], model_names[-1])
         # do the nullspace stuff
-        if plot_nullspace:
+        if plot_nullspace_bool:
             lfp_ygt, fig, ax = lfp_ygt.nullspace_correction(
                 key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
                 w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
-                plot_results=True, save_plot=0)
+                plot_results=True, save_plot=0, max_mape=max_mape)
         else: 
             lfp_ygt = lfp_ygt.nullspace_correction(
                 key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
                 w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
-                plot_results=False, save_plot=0)
+                plot_results=False, save_plot=0, max_mape=max_mape)
 
         y2 = lfp_ygt.nullsp['w_alpha']+lfp_ygt.nullsp['v_'][-1,:]
 
-        axs[0].fill_between(
-            x, lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', 
-            zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
+        from src.nullspace import format_label
+        label = format_label(lfp_ygt.max_gamma, max_mape)
+        
+        # label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
+        # print(label)
+        axs[0].fill_between(x.reshape(-1), lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+
+        #axs[0].fill_between(
+        #    x, lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', 
+        #    zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
         axs[0].legend(loc=3)
 
 
@@ -201,27 +256,26 @@ def linearization_regeression_row_plots(
         feat_nonlin[j] = fun(X[j, :])
 
     # Throw it all into a plotter
-    plot_linearized_nonlinear_comp(feat_nonlin, x_hat, y, fun_a,
-                            cmap=cmap, 
-                            title='', xlabel='Linearized Feature', ylabel='Feature', 
-                            ax=axs[1])
+    plot_linearized_nonlinear_comp(
+        feat_nonlin, x_hat, y, fun_a, cmap=cmap, 
+        title='', xlabel='Linearized Feature', ylabel='Feature', ax=axs[1])
 
     # Right: Pearson correlation coefficient
-    plot_pearson_corr_coef_comp(feat_nonlin,  y, cmap,
-                                title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[2])
+    plot_pearson_corr_coef_comp(
+        feat_nonlin,  y, cmap, title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[2])
 
     return axs
 
 @mpl.rc_context(fname='./styles/linearization_plot.mplstyle')
 def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_names, plot_labels, cmap=sns.color_palette("icefire", as_cmap=True), show=True):
-    ''' Function to create plot of data and regression coefficients
+    """ Function to create plot of data and regression coefficients
     x: 1d array for units on the x-axis
     X: Training data, 2D array
     y: Training labels, 2D array, where each of tjhe columsn corresponds to the respective data generating mechanism.
     model: list of models that come with a .fit() function and contain a .coef property
     Ideas for labeling taken from Joe Kingtons answer. 
     https://stackoverflow.com/questions/25812255/row-and-column-headers-in-matplotlibs-subplots
-    '''
+    """
     color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
     marker_list = ['s', 'o', 'D', 'P']
     rows = len(fun_targetj) + 2
@@ -288,7 +342,7 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
 # Generate synthetic data
 
 def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
-    '''This function generates synthethic data to test the linearization methodology. 
+    """This function generates synthethic data to test the linearization methodology. 
     fun: function that is defined for all values inside range. Representing a measurement that was taken from any process. 
     range_x: np.array with two elements, the first being strictly smaller than the second, defining the meaning of the columsn
     range_m: range of factor
@@ -297,7 +351,7 @@ def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
     rows: number of rows of X, i.e. 
     snr_x: Signal to noise ratio of AWGN to be added on the signal, if -1, then this functions adds no noise to the signal
     Returns: X
-    '''
+    """
 
     # Sample m
     m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
@@ -332,14 +386,14 @@ def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
 
 
 def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1], snr=-1):
-    '''This function takes the wide data matix X as an input and generates target function values y based on the defined functions
+    """This function takes the wide data matix X as an input and generates target function values y based on the defined functions
     X: \in R^mxn with n>>m (wide data matrix, used as input for the targetfunction y
     targetfun: Underlying relationship between X and y. This can be any function from R^n -> R^1
         This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology. 
     percentage_range_x_to_t: array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1, 
         defines the range of input data that shall be used to generate the target function
         The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y  
-    '''
+    """
     rows = X.shape[0]
     columns = X.shape[1]
     y = np.zeros([rows])
@@ -362,4 +416,3 @@ def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1], snr=-1):
             # Noise up the original signal
             y[i] += noise
     return y
-
