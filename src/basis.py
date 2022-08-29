@@ -3,13 +3,13 @@
 # based on commit: bb4b776a21ec17001bf20ee6406324217f902944
 # expand it to the different basis funcitons in the source.
 import numpy as np
-import scipy
-from src.nullspace import nullspace_correction
-from src.nullspace import plot_nullspace_correction
-from src.nullspace import find_gamma
+import matplotlib.pyplot as plt
+import matplotlib.colors as clr
+from src.helper import plot_corrheatmap
 
-from sklearn.metrics import mean_absolute_percentage_error
 
+colors_IBM = ['#648fff', '#785ef0', '#dc267f', '#fe6100', '#ffb000',  '#000000']
+cmap_IBM = clr.LinearSegmentedColormap.from_list('Blue-light cb-IBM', colors_IBM[:-1], N=256)
 
 class BasicsData():
     """Class that contains all methods to manipulate the data.
@@ -191,6 +191,26 @@ class BasicsData():
             self = self.standardscaler(scale_y=True, scale_x=False)
             
         return self
+
+    # A bunch of plotting functions
+    def plot_row_column_corrheatmap(self, x_label, y_label, cmap=None, axs=None):
+        if axs is None: 
+            fig, axs = plt.subplots(1, 2, figsize=(12,6))
+        if cmap is None: 
+            cmap = cmap_IBM
+        axs[0] = plot_corrheatmap(axs[0], self.x, self.X, cmap, x_label, r'$|\rho|$ Columns')
+        axs[1] = plot_corrheatmap(axs[1], np.arange(self.X.T.shape[1]), self.X.T, cmap, y_label, r'$|\rho|$ Rows', cols=False)
+        return axs
+
+    def plot_stats(self, ax, c1, c2, c3, labelx, labely):
+        ax.plot(self.x, np.abs(np.mean(self.X, axis=0)), label='|Mean|', lw=2.5, color=c1)
+        ax.plot(self.x, np.abs(np.median(self.X, axis=0)), label='|Median|', lw=2.5, color=c3)
+        ax.plot(self.x, np.std(self.X, axis=0), label='Std.', lw=2.5, color=c2)
+        ax.legend(loc=2)
+        ax.set_xlabel(labelx)
+        ax.set_ylabel(labely)
+        return ax 
+        
 
 # Differen basis for functions.e
 def polynomial(x, num_basis=4, data_limits=[-1., 1.]):

@@ -1,4 +1,7 @@
 import numpy as np
+import pandas as pd 
+
+import seaborn as sns
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
@@ -72,7 +75,6 @@ def construct_data(x_min, x_max, basis_function,
 
     return obj
 
-
 def construct_plot_data_interactive(x_min, x_max, basis_function,  
                         mean_param0, mean_param1, mean_param2, 
                         stdv_params0, stdv_params1, stdv_params2, 
@@ -87,6 +89,65 @@ def construct_plot_data_interactive(x_min, x_max, basis_function,
                         num_datapoints=num_datapoints, draws=draws, plot_results=1)
     return None  
 
+def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Train', zorder=1): 
+    """Plot Data"""
+    ax.plot(x, X[:, :].T, label=label_data, lw=1, color=color, zorder=zorder)
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc=4)
+    #axs.set_title('Training Data')
+    ax.set_xlabel(labelx)
+    ax.set_ylabel(labely)
+    return ax
+
+def plot_corrheatmap(ax, x, X, cmap, label, title, cols=True): 
+    if cols:
+        X_df = pd.DataFrame(X[:, ::10])
+        x = x[::10]
+    else: 
+        X_df = pd.DataFrame(X[:, :])
+    X_corr = np.abs(X_df.corr())
+    if cols:
+        X_corr.set_index(np.round(x, 1), inplace=True)
+        X_corr.set_axis(np.round(x, 1), axis='columns', inplace=True)
+    mask = np.triu(X_corr)
+    if cols: 
+        ax = sns.heatmap(
+            X_corr, 
+            vmin=0, vmax=1, center=0.4,
+            cmap=cmap,
+            square=True, 
+            xticklabels=100,
+            yticklabels=100,
+            ax = ax,
+            mask=mask
+        )
+    else:
+        ax = sns.heatmap(
+            X_corr, 
+            vmin=0.7, vmax=1, center=0.85,
+            cmap=cmap,
+            square=True,
+            xticklabels=10,
+            yticklabels=10,
+            ax = ax,
+            mask=mask
+        )
+    ax.set_xticklabels(
+        ax.get_xticklabels(),
+        rotation=45,
+        horizontalalignment='right'
+    );
+    ax.set_yticklabels(
+        ax.get_xticklabels(),
+        rotation=45,
+        horizontalalignment='right'
+    );
+    ax.set_title(title)
+    ax.set_xlabel(label)
+    ax.set_ylabel(label)
+    # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
+    return ax
 
 def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, std=False):
     """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.

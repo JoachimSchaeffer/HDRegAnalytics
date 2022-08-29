@@ -5,64 +5,88 @@ Subsequently finding a constant term via regeression to match the metdoch
 """
 
 # Packages
-from matplotlib import markers
 import numpy as np
 import pandas as pd
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FormatStrFormatter
-
+import matplotlib.colors as mcolors
+from matplotlib import cm
 import seaborn as sns
 
-# ToDo: Write matplotlib wrapper similar to seaborn for the functions 
-# we want to use here. (scatter plot including nolinearity measure and pearson correlation coeff)
-from src.src_lin_feature import plot_linearized_nonlinear_comp
-from src.src_lin_feature import plot_pearson_corr_coef_comp
-
 from sklearn.linear_model import LinearRegression
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_percentage_error
+from src.basis import BasicsData
+from src.nullspace import Nullspace
+
+from src.helper import optimise_pls_cv
+from src.helper import optimize_regcoef_mape
+from src.helper import optimize_regcoef_dist
 
 import jax.numpy as jnp
 from jax import grad
 from jax import jacfwd
 
 
-class featlin(): 
-    """Class that performs feature linearization, compariosn and potentially selection.
+class Featlin(): 
+    """Class that performs feature linearization, comparison and potentially selection.
     By choice we decided not to inherit other classes in here, but instead realy on composition.
     """
-    def __init__(self, X, y, feat_funcs):
-        self.X = X
-        self.mean_x = np.mean(self.X, axis=0)
-        self.X_ = self.X - self.mean_x
-        self.std_x = np.std(self.X, axis=0)
-        self.X_std = self.X_/self.std_x
-        
-        self.y = y
-        self.mean_y = np.mean(self.y)
-        self.y_ = self.y - self.mean_y
-        self.std_y = np.std(self.y)
-        self.y_std = self.y_/self.std_y
+    def __init__(self, X=None, x=None, y=None, data_obj=None, feat_funcs=None):
+        """Initiate Featlin object. 
+        Either pass X, x, y, where 'x' is either the domain of your measurements (e.g. 2.0V-3.5V or Hz fro spectra)
+        You can also pass a linearly spaced vecotr x, if the functional domain is less well defined. 
+        Only the plots will be affected by x.
 
-        self.feat_funcs = feat_funcs
-        self.metric = []                # Metric that shall be used for 
+        Parameters
+        ----------
+        feat_funcs : list of jax numpy functions
+            feature functions that shall be testes and among which the algorithm will decide.
+        
+        """
+
+        if X is None or y is None:
+            if data_obj is None: 
+                raise ValueError('You must pass either X and y, or data_obj to instatiate class object')
+            else:
+                self.data = data_obj
+        else:
+            if x is None:
+                x = np.linspace(0, X.shape[1]-1, X.shape[1])
+            self.data = BasicsData(X=X, x=x, y=y)
+
+        if feat_funcs is None: 
+            feat_fun = [
+                lambda a : jnp.mean(a),
+                lambda a : jnp.sum(a**2),
+                lambda a : jnp.var(a),
+                lambda x: jax_moment(x,3)/((jax_moment(x,2))**(3/2)),
+                lambda x: jax_moment(x,4)/(jax_moment(x,2)**2)-3
+                ]
+            feat_fun_names = [
+                'Sum',
+                'Sum of Squares',
+                'Variance', 
+                'Skewness',
+                'Kurtosis',
+                ]
+            self.feat_fun = feat_fun
+            self.feat_fun_names = feat_fun_names
+        else:
+            self.feat_fun = feat_funcs['functions']
+            self.feat_fun = feat_funcs['names']
+        
+        self.feat_fun_np = [lambda a: np.array(self.feat_fun[i](a)) for i in range(len(self.feat_fun))]
+
+        self.metric = None              # Metric that shall be used for 
         self.max_metric = None          # Maximum value of metric that is still considered close to the nullspace
 
         self.nullspace_res_dict = {}    # Filling with results of the runs, nullspace vectors etc.
+        self.results = pd.DataFrame()   # Filling with fresults from the run. Overview!
 
-        self.results = {}               # Filling with fresults from the run. Overview!
-
-    def construct_y_data(self, response_trans):
-        """Construct responsese
-                
-        Parameters
-        ----------
-        response_trans : callable
-            function that transforms X to y
-        """
-        self.y = response_trans(self.X)
-        return self
-        
     def fit_nullspace(self, plot=0):
 
         for feat in self.feat_funcs: 
@@ -72,28 +96,103 @@ class featlin():
     def plot_feat_nullspace_run(self): 
         return self
 
+    def anlyse_features(self, color_dict, 
+        cv=1, include_cv_model=0, opt_mape=0, opt_dist=1,
+        scatter=0, plot_cv=0, max_mape=-0.5):
+        ''' Function to anlayse features given certain data! (: '''
+
+        # PLS 1 model is always selected as a reference. 
+        # Models
+        models = [
+            PLSRegression(n_components=1, tol=1e-7, scale=False)
+        ]
+        model_names = [
+            'PLS 1 comp'
+        ]
+
+        for fun in self.feat_fun:
+            # Calculate the feature and linearized coef.
+            x_hat, lin_coef_, lin_const_coef = self.regress_linearized_coeff(fun)
 
 
+            # if scatter:
+                # Make a scatterpliot here, to see whats going on.
+                # Where do you linearize? The more nonlinear the more outlier, the crappier this mehtod will be!
+                # Whats the path regression coefficeints take with varying regularization?
+                # plt.scatter(X@lin_coef_.reshape(-1), y_gt[:, 1])
+                # plt.scatter(np.array([fun_targetj[1](X[i, :]) for i in range(X.shape[0])]), y_gt[:, 1])
+                # lin_sp = np.linspace(np.min(y_gt[:, 1]), np.max(y_gt[:, 1]), 10)
+                # plt.plot(lin_sp, lin_sp)
 
-def regress_linearized_coeff(X_train, y_train, fun):
-    """Estimation of m and b via OLS regression.
-    """
-    x_hat = np.zeros(len(X_train))
-    a = np.mean(X_train, axis=0)
-    gradient = jacfwd(fun)
+            # CV only if feature is linear!
+            if cv:
+                cv_dict = optimise_pls_cv(
+                    self.X_, self.y_, max_comps=10, plot_components=plot_cv, std=False, min_distance_search=True, featlin=lin_coef_)
+                rmse_min_comp = cv_dict['components'][cv_dict['rmse_std_min']]
+                if include_cv_model:
+                    models.append(PLSRegression(n_components=rmse_min_comp, tol=1e-7, scale=False),)
+                    model_names.append('PLS ' + str(rmse_min_comp) + ' comp')
+                    print(model_names)
 
-    for i in range(len(X_train)):
-        # np.dot: If both a and b are 1-D arrays, it is inner product of vectors (without complex conjugation).
-        x_hat[i] = fun(a) + np.dot((X_train[i, :]-a), gradient(a))
-    
-    reg = LinearRegression(fit_intercept=True).fit(x_hat.reshape(-1, 1), y_train-y_train.mean())
+            if opt_mape:
+                mape_lin = 100*mean_absolute_percentage_error(y, self.X@lin_coef_.reshape(-1))
+                alpha = optimize_regcoef_mape('ridge', self.X_, self.y_, [10**5, 10**(-5)], mape_lin+1.5, max_depth=10)
+                models.append(Ridge(alpha=alpha))
+                model_names.append(f" RR: {alpha:.2f}")
 
-    m = reg.coef_
-    b = reg.intercept_
-    linearized_coef = m * gradient(a)
-    linearized_const_coef = m*fun(a) + b
-    
-    return x_hat, np.array(linearized_coef), np.array(linearized_const_coef)
+            if opt_dist:
+                alpha = optimize_regcoef_dist('ridge', self.X_, self.y_, [10**5, 10**(-5)], lin_coef_, norm=1, max_depth=10)
+                # models.append(Ridge(alpha=alpha))
+                # model_names.append(f" RR: {alpha:.2f}")
+
+                comp = optimize_regcoef_dist('PLS', self.X_, self.y_, [10], lin_coef_, norm=1, max_depth=10)
+                print('opt_dict')
+                # Ensures that this is the last list item by removing previous identical entries. 
+                if f"PLS {comp} comp" in model_names:
+                    id = model_names.index(f"PLS {comp} comp")
+                    model_names.remove(f"PLS {comp} comp")
+                    print(id)
+                    models.pop(id)
+                    # models.remove(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+                    models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+                    model_names.append(f"PLS {comp} comp")
+                    
+        
+            model_dict = {'models': models, 'model_names': model_names}
+            label_dict = {'xlabel': 'Voltage (V)'}
+            print(model_dict['model_names'])
+
+        return self
+
+    def linearization_plot(self, target_fun_id):
+        fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [7, 3, 3]}, figsize=(36,7))
+        linearization_regeression_row_plots(
+            self.X_, self.x, self.y_, fun_targetj, axs, cmap, model_dict, color_dict, label_dict,
+            nullspace_corr=True, plot_nullspace_bool=False, max_mape=max_mape)
+        # plt.show()
+        return fig, axs
+
+
+    def regress_linearized_coeff(self, fun):
+        """Estimation of m and b via OLS regression.
+        """
+        x_hat = np.zeros(len(self.X_))
+        a = np.mean(self.X_, axis=0)
+        gradient = jacfwd(fun)
+
+        for i in range(len(self.X_)):
+            # np.dot: If both a and b are 1-D arrays, it is inner product of vectors (without complex conjugation).
+            x_hat[i] = fun(a) + np.dot((self.X_[i, :]-a), gradient(a))
+        
+        reg = LinearRegression(fit_intercept=True).fit(x_hat.reshape(-1, 1), self.y_)
+
+        m = reg.coef_
+        b = reg.intercept_
+        linearized_coef = m * gradient(a)
+        linearized_const_coef = m*fun(a) + b
+        
+        return x_hat, np.array(linearized_coef), np.array(linearized_const_coef)
+
 
 def jax_moment(X, power): 
     """rewriting the sample moment without prefactor! 1/n
@@ -107,83 +206,11 @@ def jax_moment(X, power):
         shape = X.shape[0]
     return jnp.sum(jnp.power(X_tilde, power))/shape
 
-def plot_x_tt2(ax, x, X, color, labelx, labely, label_data='Train', zorder=1): 
-    ax.plot(x, X[:, :].T, label=label_data, lw=1, color=color, zorder=zorder)
-    handles, labels = ax.get_legend_handles_labels()
-    by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc=4)
-    #axs.set_title('Training Data')
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-    return ax
-
-def plot_corrheatmap(ax, x, X, cmap, labelx, labely, title, cols=True): 
-    if cols:
-        X_df = pd.DataFrame(X[:, ::10])
-        x = x[::10]
-    else: 
-        X_df = pd.DataFrame(X[:, :])
-    X_corr = np.abs(X_df.corr())
-    if cols:
-        X_corr.set_index(np.round(x, 1), inplace=True)
-        X_corr.set_axis(np.round(x, 1), axis='columns', inplace=True)
-    mask = np.triu(X_corr)
-    if cols: 
-        ax = sns.heatmap(
-            X_corr, 
-            vmin=0, vmax=1, center=0.4,
-            cmap=cmap,
-            square=True, 
-            xticklabels=100,
-            yticklabels=100,
-            ax = ax,
-            mask=mask
-        )
-    else:
-        ax = sns.heatmap(
-            X_corr, 
-            vmin=0.7, vmax=1, center=0.85,
-            cmap=cmap,
-            square=True,
-            xticklabels=10,
-            yticklabels=10,
-            ax = ax,
-            mask=mask
-        )
-    ax.set_xticklabels(
-        ax.get_xticklabels(),
-        rotation=45,
-        horizontalalignment='right'
-    );
-    ax.set_yticklabels(
-        ax.get_xticklabels(),
-        rotation=45,
-        horizontalalignment='right'
-    );
-    ax.set_title(title)
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-    # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
-    return ax
-
-def plot_stats(ax, x, X, c1, c2, c3, labelx, labely):
-    ax.plot(x, np.abs(np.mean(X.T, axis=1)), label='|Mean|', lw=2.5, color=c1)
-    ax.plot(x, np.abs(np.median(X.T, axis=1)), label='|Median|', lw=2.5, color=c3)
-    ax.plot(x, np.std(X.T, axis=1), label='Std.', lw=2.5, color=c2)
-    ax.legend(loc=2)
-    ax.set_xlabel(labelx)
-    ax.set_ylabel(labely)
-    return ax 
-
 def linearization_regeression_row_plots(
     X, x, y, fun, axs, cmap, model_dict, color_dict, label_dict,
     nullspace_corr=True, plot_nullspace_bool=False, max_mape=-0.5):
     """
     """
-    from src.src_lin_feature import plot_linearized_nonlinear_comp
-    from src.src_lin_feature import plot_pearson_corr_coef_comp
-    from sklearn.metrics import mean_absolute_percentage_error
-    import src.basis as basis
 
     model_names = model_dict['model_names']
     models = model_dict['models']
@@ -211,32 +238,33 @@ def linearization_regeression_row_plots(
 
     if nullspace_corr: 
         # Create Nullspace object
-        lfp_ygt = basis.SynMLData(None, None).place_X_y(X, x, y)
+        data = BasicsData(X=X, x=x, y=y)
         # Train the model with the regression coeficients that shall be testes
-        lfp_ygt.learn_weights(models[-1], model_names[-1])
+        nulls_ = Nullspace(data)
+        nulls_.learn_weights([models[-1]], [model_names[-1]])
         # do the nullspace stuff
         if plot_nullspace_bool:
-            lfp_ygt, fig, ax = lfp_ygt.nullspace_correction(
+            nulls_, fig, ax = nulls_.nullspace_correction(
                 key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
                 w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
                 plot_results=True, save_plot=0, max_mape=max_mape)
         else: 
-            lfp_ygt = lfp_ygt.nullspace_correction(
+            nulls_ = nulls_.nullspace_correction(
                 key_alpha=model_names[-1], w_alpha_name=model_names[-1], 
                 w_beta = lin_coef_.reshape(-1), w_beta_name='Mean Weights', std=False, 
                 plot_results=False, save_plot=0, max_mape=max_mape)
 
-        y2 = lfp_ygt.nullsp['w_alpha']+lfp_ygt.nullsp['v_'][-1,:]
+        y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
 
         from src.nullspace import format_label
-        label = format_label(lfp_ygt.max_gamma, max_mape)
+        label = format_label(nulls_.max_gamma, max_mape)
         
         # label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
         # print(label)
-        axs[0].fill_between(x.reshape(-1), lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+        axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
 
         #axs[0].fill_between(
-        #    x, lfp_ygt.nullsp['w_alpha'], y2=y2, color='darkgrey', 
+        #    x, nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', 
         #    zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
         axs[0].legend(loc=3)
 
@@ -339,80 +367,89 @@ def linearization_plots(x,  X, y, fun_targetj, fun_target_names, models, model_n
             
     return fig, axs
 
-# Generate synthetic data
+def plot_linearized_nonlinear_comp(feature_non_lin, feature_linearized, y_train, 
+                                   center_taylor, cmap,
+                                   title='', xlabel='', ylabel='', ax=None):
+    '''Plots the linear and non linear scalar feature values and makes a visual comparison!
+    '''
+    # Get axis object in case no axis object was passed explicitly
+    # if ax is None:
+    #    print('ax is None, create aixs')
+    #    ax = plt.gca()
+    y_train_norm = (y_train-y_train.min())/(y_train.max()-y_train.min())
 
-def generate_wide_datamatrix(fun, range_x, range_m, columns, rows, snr_x=-1):
-    """This function generates synthethic data to test the linearization methodology. 
-    fun: function that is defined for all values inside range. Representing a measurement that was taken from any process. 
-    range_x: np.array with two elements, the first being strictly smaller than the second, defining the meaning of the columsn
-    range_m: range of factor
-        each row of x is equal to m*fun(x), where m is sampled from a uniform distribution
-    datapoints: number of linearly spaced datapoints for evaluating fun, equal to number of columns of X
-    rows: number of rows of X, i.e. 
-    snr_x: Signal to noise ratio of AWGN to be added on the signal, if -1, then this functions adds no noise to the signal
-    Returns: X
-    """
+    nrmse = mean_squared_error(feature_non_lin, feature_linearized, squared=False)/np.abs(feature_non_lin.max()-feature_non_lin.min())
+    # ind_ = np.where((y>=350) & (y<=1500))
+    # rmse_ = mean_squared_error(feature_non_lin[ind_], feature_linearized[ind_], squared=False)
+    
+    rss = np.sum(np.abs(feature_non_lin - feature_linearized))
 
-    # Sample m
-    m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
-
-    # create X and y
-    x = np.linspace(range_x[0], range_x[1], columns)
-    fun_values = fun(x)
-    X = np.zeros([rows, columns])
-    y = np.zeros(rows)
-    for i in range(rows):
-        row_i = m[i]*fun_values
-        if snr_x != -1: 
-            # Add Gaussian noise to the measurements
-            # Snippet below partly copied/adapted/inspired by: 
-            # https://stackoverflow.com/questions/14058340/adding-noise-to-a-signal-in-python
-            # Answer from Noel Evans, accessed: 18.05.2022, 15:37 CET
-            # Calculate signal power and convert to dB 
-            sig_avg_watts = np.mean(row_i**2)
-            sig_avg_db = 10 * np.log10(sig_avg_watts)
-            # Calculate noise according to [2] then convert to watts
-            noise_avg_db = sig_avg_db - snr_x
-            noise_avg_watts = 10 ** (noise_avg_db / 10)
-            # Generate an sample of white noise
-            mean_noise = 0
-            noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), columns)
-            # Noise up the original signal
-            row_i += noise
-
-        X[i, :] = row_i
-
-    return np.array(X), x
+    for i in range(len(feature_non_lin)):
+        ax.scatter(feature_linearized[i], feature_non_lin[i], color=cmap(y_train_norm[i]), s=100)
+    
+    h1 = ax.scatter(center_taylor, center_taylor, marker="+", s=35**2, linewidths=3,
+                    label=r'$\mathbf{a}=\overline{\mathbf{x}}^{\mathrm{train}}$')
+    vals  = np.linspace(
+        feature_linearized.min(),
+        feature_linearized.max(), 10)
+    
+    ax.plot(vals, vals)
+    
+    cb = plt.colorbar(cm.ScalarMappable(norm=mcolors.Normalize(vmin=y_train.min(), vmax=y_train.max(), clip=False), cmap=cmap), ax=ax)
+    # cb.set_label('Cycle Life', labelpad=10)
 
 
-def generate_target_values(X, targetfun, percentage_range_x_to_t=[0,1], snr=-1):
-    """This function takes the wide data matix X as an input and generates target function values y based on the defined functions
-    X: \in R^mxn with n>>m (wide data matrix, used as input for the targetfunction y
-    targetfun: Underlying relationship between X and y. This can be any function from R^n -> R^1
-        This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology. 
-    percentage_range_x_to_t: array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1, 
-        defines the range of input data that shall be used to generate the target function
-        The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y  
-    """
-    rows = X.shape[0]
-    columns = X.shape[1]
-    y = np.zeros([rows])
-    for i in range(rows):
-        row_i = X[i, :]
-        low_ind = int(percentage_range_x_to_t[0]*columns)
-        high_ind = int(percentage_range_x_to_t[1]*columns)
-        y[i] = targetfun(row_i[low_ind:high_ind])
+    # How good is the linear approximation:
+    mean_fx = np.mean(feature_non_lin)
+    f_mean_x = center_taylor
+    rel_deviation = np.abs((f_mean_x-mean_fx)/mean_fx)
 
-    if snr>0:
-        for i, yi in enumerate(y): 
-            sig_avg_watts = np.mean(yi**2)
-            sig_avg_db = 10 * np.log10(sig_avg_watts)
-            # Calculate noise according to [2] then convert to watts
-            noise_avg_db = sig_avg_db - snr
-            noise_avg_watts = 10 ** (noise_avg_db / 10)
-            # Generate an sample of white noise
-            mean_noise = 0
-            noise = np.random.normal(mean_noise, np.sqrt(noise_avg_watts), 1)
-            # Noise up the original signal
-            y[i] += noise
-    return y
+    textstr = '\n'.join((
+        'NRMSE: %.3f' % (nrmse),
+        # 'RMSE Central Region: %.2f' % (rmse_),
+        'Dev at center: %.2f' % (100*rel_deviation) + '%',
+        ))
+    h2 = ax.plot([], [], ' ', label=textstr)
+    
+    # Fix overlapping axis ticks in case of small numbers
+    if np.abs(feature_linearized.max()-feature_linearized.min()) < 0.01:
+        ax.ticklabel_format(axis='both', style='sci',  useOffset=True, scilimits=(0,0))
+
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+
+    handles, labels = ax.get_legend_handles_labels()
+    order = [1,0]
+    ax.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
+    ax.grid()
+
+    return
+
+def plot_pearson_corr_coef_comp(feature_non_lin,  y_train, cmap,
+                                 title='Person Correlation', xlabel='', ylabel='', ax=None):
+    '''Plots the feature values and y response values, display the person corr coeff
+    '''
+    # Get axis object in case no axis object was passed explicitly
+    # if ax is None:
+    #    print('ax is None, create aixs')
+    #    ax = plt.gca()
+ 
+    corr_coeff = np.corrcoef(np.column_stack((feature_non_lin, y_train)), rowvar=False)
+
+    y_train_norm = (y_train-y_train.min())/(y_train.max()-y_train.min())
+    for i in range(len(feature_non_lin)):
+        ax.scatter(feature_non_lin[i], y_train[i], color=cmap(y_train_norm[i]), s=100)
+    
+    cb = plt.colorbar(cm.ScalarMappable(norm=mcolors.Normalize(vmin=y_train.min(), vmax=y_train.max(), clip=False), cmap=cmap), ax=ax)
+    # cb.set_label('Cycle Life', labelpad=10)
+
+    h2 = ax.plot([], [], ' ', label='Pearson corr: %.2f' % corr_coeff[0, 1])
+    ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
+    
+    # handles, labels = ax.get_legend_handles_labels()
+    # order = [1,0]
+    ax.legend()
+    ax.grid()
+
+    return
