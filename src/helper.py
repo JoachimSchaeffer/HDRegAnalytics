@@ -268,8 +268,8 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
         'l2_distance': np.array(l2_distance)}
     return res_dict
 
-def optimize_regcoef_mape(model, X, y, regularization_limits, mape_error, max_depth=5): 
-    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired MAPE error.
+def optimize_regcoef_nrmse(model, X, y, regularization_limits, nrmse_error, max_depth=5): 
+    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
     As of now, only PLS regression or ridge regression are implemented. 
     This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
     in the case of ridge regression in 10 gemetrically spaced values between the regularization limits.
@@ -282,7 +282,7 @@ def optimize_regcoef_mape(model, X, y, regularization_limits, mape_error, max_de
             model = PLSRegression(n_components=i+1, tol=1e-7, scale=False)
             model.fit(X-np.mean(X, axis=0), y-y.mean())
             pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
-            if pred_error <= mape_error:
+            if pred_error <= nrmse_error:
                 break
         reg = i
     elif model=='ridge':
@@ -292,7 +292,7 @@ def optimize_regcoef_mape(model, X, y, regularization_limits, mape_error, max_de
                 model = Ridge(alpha=alpha)
                 model.fit(X-np.mean(X, axis=0), y-y.mean())
                 pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
-                if pred_error <= mape_error:
+                if pred_error <= nrmse_error:
                     break
             alphas = np.geomspace(alphas[i-1], alpha, num=11)
         reg = alpha
@@ -301,7 +301,7 @@ def optimize_regcoef_mape(model, X, y, regularization_limits, mape_error, max_de
     return reg
 
 def optimize_regcoef_dist(model, X, y, regularization_limits, lin_coef_, norm=1, max_depth=5): 
-    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired MAPE error.
+    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
     As of now, only PLS regression or ridge regression are implemented. 
     This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
     in the case of ridge regression in 10 gemetrically spaced values between the regularization limits.
@@ -376,3 +376,4 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))
     return new_cmap
+
