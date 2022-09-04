@@ -3,6 +3,7 @@ from numpy import linalg as LA
 
 from scipy import linalg
 from scipy.linalg import toeplitz
+from scipy.optimize import minimize
 
 # from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_squared_error
@@ -61,7 +62,7 @@ class Nullspace():
     def nullspace_correction(
         self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, max_nrmse=-0.5,
         plot_results=False, save_plot=False, path_save='', file_name='', **kwargs):
-        """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.
+        """Function that calls 'nullspace_calc allowing to shorten syntax.
 
         Parameters
         ----------
@@ -142,7 +143,7 @@ class Nullspace():
         if 'nb_gammas' in kwargs:
             nb_gammas = kwargs.get('nb_gammas')
         else:
-            nb_gammas = 30
+            nb_gammas = 6
 
         y_ = self.data.y_
 
@@ -159,65 +160,84 @@ class Nullspace():
         nrmse_beta = 100*mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)/(np.max(y_)-np.min(y_))
         if max_nrmse < 0:
             self.max_nrmse = np.abs(max_nrmse) * np.abs(nrmse_alpha-nrmse_beta)
+            mse_alpha = mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)
+            mse_beta = mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)
+            self.max_mse = np.abs(max_nrmse) * np.abs(mse_alpha-mse_beta)
         else: 
             self.max_nrmse = max_nrmse
-        # print(np.max(y_)-np.min(y_))
-        #print(self.max_nrmse)
-        #print(nrmse_alpha)
-        #print(nrmse_beta)
-        #print(np.abs(nrmse_alpha-nrmse_beta))
-        if np.abs(nrmse_alpha-nrmse_beta) > self.max_nrmse:
-            # Find largest value for gamma that is not modifying the resutls more than max_nrmse. 
-            # The issue is that this problem is not necessarily convex and the optimizer get stuck in local optima.
-            # This is a simple (but ineffective way) way of optimizing which should suffice for this issue.
-            nb_gammas=10
-            # gammas = np.append([0], np.geomspace(1, 10**10, nb_gammas))
-            # gammas = np.linspace(10**8, 1, nb_gammas)
-            # nrmse_diff = np.zeros(len(gammas))
-            # depth=5
-            # for i in range(depth):
-                 # print(i)
-            #    for j, gamma in enumerate(gammas): 
-            #        nrmse_diff[j] = find_gamma(
-            #            [gamma], self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, self.max_nrmse)
-            #        if np.abs(nrmse_diff[j]) < self.max_nrmse: 
-            #            break
-            #    if j==0:
-            #        break
-            #    else:
-            #        if gammas[j-1]==0:
-            #            # gammas = np.append([0], np.geomspace(10**(-12), gammas[j], nb_gammas))
-            #            gammas = np.linspace(0, gammas[j], nb_gammas)
-            #       else:
-            #            gammas=np.linspace(gammas[j-1], gammas[j], nb_gammas)
-                        # gammas=np.geomspace(gammas[j-1], gammas[j], nb_gammas)
-            #print(i)
-            #self.max_gamma = gamma
 
+        #print(f'Alpha NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)}')
+        #print(f'Beta NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)}')
+        print(f'Alpha NRMSE: {nrmse_alpha}')
+        print(f'Beta NRMSE: {nrmse_beta}')
+        print(f'Max NRMSE: {self.max_nrmse}')
+
+        def objective_gamma(gamma):
+            return -gamma
+        
+        def constraint(gamma, method='NRMSE'):
+            # print(f'Gamma: {gamma}')
+            n = self.data.X.shape[0]
+            v, v_, norm_, gs = nullspace_calc(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, gs=[gamma], comp_block=False)   
+            # val = mean_squared_error(y_, X@(v_.reshape(-1)), squared=False) 
+            if method=='MSE':
+                mse_reg = mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)
+                mse_nulls = mean_squared_error(y_, X@(self.nullsp[key_alpha]+v_.reshape(-1)), squared=False)
+                val = np.abs(mse_reg-mse_nulls)-self.max_mse
+            elif method=='NRMSE':
+                nrmse_reg = 100*mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)/(np.max(y_)-np.min(y_))
+                nrmse_nulls = 100*mean_squared_error(y_, X@(self.nullsp[key_alpha]+v_.reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
+                val = np.abs(nrmse_reg-nrmse_nulls)-self.max_nrmse
+            # print(f'Delta MSE of gamma: {val}')   
+            return val
+
+
+        if np.abs(nrmse_alpha-nrmse_beta) > self.max_nrmse:
+            # This is a simple (but ineffective way) way of optimizing which should suffice for this issue.
+            gammas = np.geomspace(10**5, 0.001, nb_gammas)
+            depth = 15 
+            thres = self.max_nrmse * 0.0003
+            for i in range(depth):
+                for j, gamma in enumerate(gammas): 
+                    cons = constraint(gamma)
+                    if cons <= thres:
+                        break
+                if np.abs(cons) <= thres:
+                    break 
+                else:
+                    gammas=np.geomspace(gammas[j-1], gammas[j], nb_gammas)
+            self.max_gamma = gamma
+            self.max_nrmse = cons+self.max_nrmse
+            print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
+            
+            #con = {'type': 'eq', 'fun': constraint}
+            #solution = minimize(objective_gamma, 5000, method='SLSQP',\
+            #        bounds=[(1, 10**10)], constraints=con)
+            #print(solution.x[0])
+            #print(f'Contraint {constraint(solution.x[0])}')
+            #self.max_gamma = solution.x[0]
             # y_range = np.max(y_) - np.min(y_)
             # gs_inital = 100*y_range
             # Find value for gamma that 
-            import scipy as sp
-            gamma_upper_limit = sp.optimize.minimize(
-                find_gamma_, 100, args=(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, max_nrmse),
-                method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
-            self.max_gamma = gamma_upper_limit.x[0]
-
-            print(f'Gamma value corresponding to nrmse={self.max_nrmse:.2f} % is {self.max_gamma:.3f}')
+            #import scipy as sp
+            # gamma_upper_limit = sp.optimize.minimize(
+            #     find_gamma_, 100, args=(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, max_nrmse),
+            #     method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
+            # self.max_gamma = gamma_upper_limit.x[0]
 
             if self.max_gamma < 10**(-12):
                 gamma_vals = [self.max_gamma]
             else: 
                 gamma_vals = np.geomspace(10**(-12), self.max_gamma+2*(10**(-12)), 30)
 
-            self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = nullspace_correction(
+            self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = nullspace_calc(
                 self.nullsp[key_alpha], self.nullsp[key_beta], X, x, gs=gamma_vals, comp_block=0)
         else:
             self.nullsp['v'] = np.array([self.nullsp[key_beta]-self.nullsp[key_alpha]])
             self.nullsp['v_'] = np.array(self.nullsp[key_beta]-[self.nullsp[key_alpha]])
             self.nullsp['gamma'] = 0 
             self.max_gamma = np.inf
-        print(self.max_gamma)
+        # print(self.max_gamma)
         if plot_results:
             fig, ax = self.plot_nullspace_correction(std=std)
             if save_plot:
@@ -260,7 +280,7 @@ class Nullspace():
         return fig, ax
     
 
-def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False):
+def nullspace_calc(w_alpha, w_beta, X, x, gs=[None], comp_block=False):
     """This functions performs a nulspace normalization of regression coefficents.
     The problem is set up such that the L2 norm differences between ther regression 
     coefficients is minimzed.
@@ -320,67 +340,35 @@ def nullspace_correction(w_alpha, w_beta, X, x, gs=[None], comp_block=False):
     # Do the magic:
     
     # Approach 1: Full equations
-    S = st@ssti@s
-    v = (Vh.T@S@Vh - I)@w
+    # S = st@ssti@s
+    # v = (Vh.T@S@Vh - I)@w
+
     
     # Approch 2: working with block matrices. 
     # This doesnt solve the issue of poor conditioned X....
+    nb_gs = len(gs)
+    v_ = np.zeros((nb_gs, shape[1]))
+    norm_ = np.zeros(nb_gs)
+
     if comp_block:
-        v11 = Vh.T[:41,:41]
-        v12 = Vh.T[:41,41:]
-        v21 = Vh.T[41:,:41]
-        v22 = Vh.T[41:,41:]
+        # v11 = Vh.T[:shape[0],:shape[0]]
+        v12 = Vh.T[:shape[0],shape[0]:]
+        # v21 = Vh.T[shape[0]:,:shape[0]]
+        v22 = Vh.T[shape[0]:,shape[0]:]
         left = np.concatenate((-v12@v12.T, -v22@v12.T), axis=0)
         right = np.concatenate((-v12@v22.T, -v22@v22.T), axis=0)
         v_ = np.concatenate((left, right), axis=1)@w
 
-        plt.plot(x, v_, label='Simplified Equations')
-        plt.plot(x, v, label='Non Simplified Equations')
-        plt.legend()
-        plt.show()
+        #plt.plot(x, v_, label='Simplified Equations')
+        #plt.plot(x, v, label='Non Simplified Equations')
+        #plt.legend()
+        #plt.show()
 
-    # Approach of Toeplitz matrix regularization 
-    # r1 = np.concatenate((np.array([1]), np.zeros(points-2)))
-    # c1 = np.concatenate((np.array([1, -1]), np.zeros(points-2)))
-    # E1 = toeplitz(r1, c1)
-
-    # r2 = np.concatenate((np.array([-1, 0, 0]), np.zeros(points-5)))
-    # c2 = np.concatenate((np.array([-1, 2, -1]), np.zeros(points-3)))
-    # E2 = toeplitz(r2, c2)
-    
-    nb_gs = len(gs)
-    v_ = np.zeros((nb_gs, shape[1]))
-    norm_ = np.zeros(nb_gs)
-    
-    # v_snig = np.zeros((nb_gs, shape[1]))
-    # norm_snig= np.zeros(nb_gs)
-    # g2 = 1000
-    
     for i,g in enumerate(gs):
         v_[i,:] = -linalg.inv(g*X.T@X+I)@w
         norm_[i] = LA.norm(w_alpha+v_[i,:]-w_beta, 2)
-        # if snig:
-        #    v_snig[i,:] = -linalg.inv(g*X.T@X+g2*E2.T@E2+I)@w 
-        #    norm_snig[i] = LA.norm(w_alpha+v_[i,:]-w_beta, 2)
-    #if snig:   
-    #    return v, v_, v_snig, norm_, norm_snig, gs
-    #else:
-    
-    return v, v_, norm_, gs
 
-def find_gamma(gs, w_alpha, w_beta, X_, x, y_, nrmse): 
-    v, v_, norm_, gs = nullspace_correction(w_alpha, w_beta, X_, x, gs=gs, comp_block=False)
-    nrmse_reg = 100*mean_squared_error(y_, X_@(w_alpha), squared=False)/(np.max(y_)-np.min(y_))
-    nrmse_nulls = 100*mean_squared_error(y_, X_@(w_alpha+v_.reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
-    print(np.abs(nrmse_reg-nrmse_nulls))
-    return np.abs(nrmse_reg-nrmse_nulls)
-
-def find_gamma_(gs, w_alpha, w_beta, X_, x, y_, nrmse): 
-    v, v_, norm_, gs = nullspace_correction(w_alpha, w_beta, X_, x, gs=gs, comp_block=False)
-    nrmse_reg = 100*mean_squared_error(y_, X_@(w_alpha), squared=False)/(np.max(y_)-np.min(y_))
-    nrmse_nulls = 100*mean_squared_error(y_, X_@(w_alpha+v_.reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
-    print(np.abs(nrmse_reg-nrmse_nulls))
-    return ((nrmse_reg-nrmse_nulls)**2 - nrmse**2)**2
+    return np.inf, v_, norm_, gs
 
 def format_label(max_gamma, max_nrmse):
     """Helps with label formatting for the nullspace!
@@ -393,12 +381,15 @@ def format_label(max_gamma, max_nrmse):
     # The gamma value will highly depend on the magnitude of the differenc eof the features/regression coefficients
     # Thus it is very difficult to interpret.
     if max_nrmse <= 0.01:
-        if max_nrmse <= 10**(-8):
-            label=r'$\in \mathcal{\mathbf{N}}(X)$ enlarged by 0.00% nrmse'
+        if max_nrmse <= 10**(-12):
+            label=r'$\in \mathcal{\mathbf{N}}(X)$'
         else:
-            label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_nrmse:.3f}% nrmse'# + '\n Corresponding ' + r'$\gamma=$' + g_str
+            if max_nrmse >= 0.001:
+                label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by NRMSE: {max_nrmse:.3f}%'# + '\n Corresponding ' + r'$\gamma=$' + g_str
+            else:
+                label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by NRMSE: {max_nrmse:.1e}%'
     else:
-        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by {max_nrmse:.2f}% nrmse'# + '\n Corresponding ' + r'$\gamma=$' + g_str
+        label=r'$\in \mathcal{\mathbf{N}}(X)$' + f' enlarged by NRMSE: {max_nrmse:.2f}%'# + '\n Corresponding ' + r'$\gamma=$' + g_str
 
     return label
 
@@ -491,8 +482,8 @@ def plot_nullspace_correction(
     nrmse_alpha = 100*mean_squared_error(y, X@(w_alpha), squared=False)/(np.max(y)-np.min(y))
     nrmse_beta = 100*mean_squared_error(y, X@(w_beta), squared=False)/(np.max(y)-np.min(y))
 
-    coef_alpha_label = f"{coef_name_alpha}, nrmse: {nrmse_alpha:.2f} %"
-    coef_beta_label = f"{coef_name_beta}, nrmse: {nrmse_beta:.2f} %"
+    coef_alpha_label = f"{coef_name_alpha}, NRMSE: {nrmse_alpha:.3f}%"
+    coef_beta_label = f"{coef_name_beta}, NRMSE: {nrmse_beta:.3f}%"
     ax[1].plot(x, w_alpha, label=coef_alpha_label, color='darkgreen', marker="P", markevery=markevery, markersize=8, linewidth=2.5, zorder=v.shape[0]+1)   
     ax[1].plot(x, w_beta, label=coef_beta_label, color='k', linewidth=2.5, zorder=v.shape[0]+1)
 
