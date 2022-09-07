@@ -12,7 +12,7 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import cross_val_score
 
-from sklearn.metrics import mean_absolute_percentage_error
+from sklearn.metrics import mean_squared_error
 
 import src.basis as basis
 import src.nullspace
@@ -268,7 +268,7 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
         'l2_distance': np.array(l2_distance)}
     return res_dict
 
-def optimize_regcoef_nrmse(model, X, y, regularization_limits, nrmse_error, max_depth=5): 
+def optimize_regcoef_nrmse(model, X, y, regularization_limits, lin_coef_, max_depth=10): 
     '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
     As of now, only PLS regression or ridge regression are implemented. 
     This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
@@ -278,25 +278,34 @@ def optimize_regcoef_nrmse(model, X, y, regularization_limits, nrmse_error, max_
         # Start with highest regularization and decrease by step of 1.
         if type(regularization_limits[0]) != int:
             raise TypeError('If PLS is the model, the upper regularization error must be integer!')
+        pred_error = np.zeros(regularization_limits[0])
         for i in range(regularization_limits[0]):
             model = PLSRegression(n_components=i+1, tol=1e-7, scale=False)
             model.fit(X-np.mean(X, axis=0), y-y.mean())
-            pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
-            if pred_error <= nrmse_error:
-                break
-        reg = i
+            pred_error[i] = mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)
+        reg = np.where(pred_error==np.min(pred_error))[0][0]+1
+        print(reg)
     elif model=='ridge':
         alphas = np.geomspace(regularization_limits[0], regularization_limits[1], num=11)
+        pred_error = np.zeros(len(alphas))
         for i in range(max_depth):
             for i, alpha in enumerate(alphas):
                 model = Ridge(alpha=alpha)
                 model.fit(X-np.mean(X, axis=0), y-y.mean())
-                pred_error = 100*mean_absolute_percentage_error(y, X@(model.coef_.reshape(-1)))
-                if pred_error <= nrmse_error:
-                    break
-            alphas = np.geomspace(alphas[i-1], alpha, num=11)
-        reg = alpha
-    else: 
+                # Constant factore deleted. MSE Sufficient here.
+                pred_error[i] = mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)
+            pre1, pre2 = np.partition(pred_error, 2)[0:2]
+            id1 = np.where(pred_error==pre1)[0][0]
+            id2 = np.where(pred_error==pre2)[0][0]
+            alphas = np.geomspace(alphas[id1], alphas[id2], num=11)
+        id_min = np.where(pred_error==np.min([pre1, pre2]))
+        reg = alphas[id_min][0]
+        model = Ridge(alpha=reg)
+        model.fit(X-np.mean(X, axis=0), y-y.mean())
+        # Constant factore deleted. MSE Sufficient here.
+        pred_error_min = 100*mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)/(np.max(y)-np.min(y))
+        print(f' Alpha: {reg:.4f}, corresponding to {pred_error_min:.4f}')
+    else:
         raise ValueError('Not Implemented')
     return reg
 

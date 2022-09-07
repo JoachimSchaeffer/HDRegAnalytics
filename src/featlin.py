@@ -94,10 +94,11 @@ class Featlin():
     def regress_linearized_coeff(self, fun, std=False):
         """Estimation of m and b via OLS regression.
         """
-        if std: 
-            X = self.data.X_std
-        else: 
-            X = self.data.X
+        #if std: 
+        #    X = self.data.X_std
+        #else: 
+        #    X = self.data.X
+        X = self.data.X
         y = self.data.y
 
         x_hat = np.zeros(len(X))
@@ -115,28 +116,48 @@ class Featlin():
         linearized_coef = m * gradient(a)
         linearized_const_coef = m*fun(a) + b
         
-        return x_hat, np.array(linearized_coef), np.array(linearized_const_coef)
+        if std:
+            lin_coef = np.array(linearized_coef)*np.std(X, axis=0)
+        else:
+            lin_coef = np.array(linearized_coef)
 
-    def fit_nullspace(self, plot=0):
-        """Fits the nullspace for all feature functions. 
-        Calls analyse features in a loop.
-        """
-        for feat_key in self.feat_fun_dict.keys(): 
-            self = self.analyse_feature(feat_key)
-            if plot:
-                self.linearization_plot(feat_key)
-        return self 
+        return x_hat, lin_coef, np.array(linearized_const_coef)
     
-    def analyse_all_features(self, opt_nrmse=1, opt_dist=1, max_nrmse=1):
+    def analyse_all_features(
+        self, opt_nrmse={'active':True}, 
+        opt_dist={'active':False}, max_nrmse=1, 
+        fig_props={'save':False}, std=False):
         """Analyses all Features"""
-        for key in self.nullspace_dict.keys(): 
+
+        if not fig_props['multiple_fig']: 
+            fig = plt.figure(constrained_layout=True, figsize=(36,7*len(self.nullspace_dict.keys())))
+            subfigs = fig.subfigures(nrows=len(self.nullspace_dict.keys()), ncols=1)
+            #fig, axs = plt.subplots(len(self.nullspace_dict.keys()), 3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]}, figsize=(36,7*len(self.nullspace_dict.keys()))
+            #    )
+
+        for i, key in enumerate(self.nullspace_dict.keys()): 
             self.analyse_feature(key, cv=0, include_cv_model=1, opt_nrmse=opt_nrmse, opt_dist=opt_dist,
-                plot_cv=0, max_nrmse=max_nrmse)
-            self.linearization_plot(key)
+                plot_cv=0, max_nrmse=max_nrmse, std=std)
+            if fig_props['multiple_fig']:
+                fig, ax = self.linearization_plot(key)
+                if fig_props['save']: 
+                    fig.suptitle(f'Linearized {key} Feature {fig_props["response"]}', y=0.94)
+                    ax[0].set_xlabel(fig_props['ax0_xlabel'])
+                    plt.tight_layout()
+                    fig.savefig(fig_props['save_path'] + key + fig_props["response"] + '.pdf')
+            else: 
+                subfigs[i].suptitle(f'Linearized {key} Feature {fig_props["response"]}')
+                axs = subfigs[i].subplots(nrows=1, ncols=3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]})
+                fig, axs = self.linearization_plot(key, axs=axs, fig=fig)
+        if not fig_props['multiple_fig']: 
+            axs[0].set_xlabel(fig_props['ax0_xlabel'])
+            # plt.tight_layout()
+            fig.savefig(fig_props['save_path'] + 'LinerizationSummary' + fig_props["response"] + '.pdf')
+        
         return self
 
     def analyse_feature(self, feat_key, std=False,
-        cv=1, include_cv_model=0, opt_nrmse=0, opt_dist=1,
+        cv=0, include_cv_model=0, opt_nrmse=0, opt_dist={'active':False},
         plot_cv=0, max_nrmse=1):
         ''' Function to anlayse features given certain data! (: '''
 
@@ -170,27 +191,39 @@ class Featlin():
                 models.append(PLSRegression(n_components=rmse_min_comp, tol=1e-7, scale=False))
                 model_names.append('PLS ' + str(rmse_min_comp) + ' comp')
 
-        if opt_nrmse:
-            nrmse_lin = 100*mean_squared_error(y, X@lin_coef_.reshape(-1), squared=False)/(np.max(y)-np.min(y))
-            alpha = optimize_regcoef_nrmse('ridge', X, y, [10**5, 10**(-5)], nrmse_lin+1.5, max_depth=10)
-            models.append(Ridge(alpha=alpha))
-            model_names.append(f"RR: {alpha:.2f}")
+        # Not a good idea. We can always find a model with a lower acc. than the optimal acc for the modeltype. 
+        # Thus we can match linearized accuracies arbitrarily well.
+        if opt_nrmse['active']:
+            if opt_nrmse['model']=='PLS':
+                max_comp = opt_nrmse['max_comp']
+                comp = optimize_regcoef_nrmse('PLS', X, y, [max_comp], lin_coef_, max_depth=10)
+                models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+                model_names.append(f"PLS {comp} comp")
+            elif opt_nrmse['model']=='ridge':
+                alpha = optimize_regcoef_nrmse('ridge', X, y, [10**5, 10**(-5)], lin_coef_, max_depth=10)
+                models.append(Ridge(alpha=alpha))
+                model_names.append(f"RR: {alpha:.5f}")
+            else:
+                raise NotImplementedError(f'Passed model not implemented')
 
-        if opt_dist:
-            # alpha = optimize_regcoef_dist('ridge', X, y, [10**5, 10**(-5)], lin_coef_, norm=1, max_depth=10)
-            # models.append(Ridge(alpha=alpha))
-            # model_names.append(f"RR: {alpha:.2f}")
-
-            comp = optimize_regcoef_dist('PLS', X, y, [10], lin_coef_, norm=1, max_depth=10)
-            # Ensures that this is the last list item by removing previous identical entries. 
-            if f"PLS {comp} comp" in model_names:
-                id = model_names.index(f"PLS {comp} comp")
-                model_names.remove(f"PLS {comp} comp")
-                print(f"popping model with {id}")
-                models.pop(id)
-                # models.remove(PLSRegression(n_components=comp, tol=1e-7, scale=False))
-            models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
-            model_names.append(f"PLS {comp} comp")
+        if opt_dist['active']:
+            if opt_dist['model']=='PLS': 
+                comp = optimize_regcoef_dist('PLS', X, y, [10], lin_coef_, norm=opt_dist['norm'], max_depth=10)
+                # Ensures that this is the last list item by removing previous identical entries. 
+                if f"PLS {comp} comp" in model_names:
+                    id = model_names.index(f"PLS {comp} comp")
+                    model_names.remove(f"PLS {comp} comp")
+                    print(f"popping model with {id}")
+                    models.pop(id)
+                    # models.remove(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+                models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+                model_names.append(f"PLS {comp} comp")
+            elif opt_dist['model']=='ridge': 
+                alpha = optimize_regcoef_dist('ridge', X, y, [10**5, 10**(-5)], lin_coef_, norm=opt_dist['norm'], max_depth=10)
+                models.append(Ridge(alpha=alpha))
+                model_names.append(f"RR: {alpha:.5f}")
+            else:
+                raise NotImplementedError(f'Passed model not implemented')
 
         model_names.append('lfun')
         self.nullspace_dict[feat_key] = dict.fromkeys(model_names)
@@ -200,6 +233,7 @@ class Featlin():
         self.nullspace_dict[feat_key]['lfun']['nrmse'] = nrmse_linfeat
         self.nullspace_dict[feat_key]['lfun']['x_hat'] = x_hat
         print(model_names)
+
         for i, model in enumerate(models):
             results.append(model_names[i])
             reg = model.fit(X, y)
@@ -213,10 +247,12 @@ class Featlin():
             # Create Nullspace object
             # Train the model with the regression coeficients that shall be testes
             nulls_ = Nullspace(self.data)
+            if std: 
+                nulls_.std = True
             nulls_.learn_weights([model], [model_names[i]])
             nulls_ = nulls_.nullspace_correction(
                 key_alpha=model_names[i], w_alpha_name=model_names[i], 
-                w_beta = lin_coef_.reshape(-1), w_beta_name='', std=False, 
+                w_beta = lin_coef_.reshape(-1), w_beta_name='', std=std, 
                 plot_results=False, save_plot=0, max_nrmse=max_nrmse)
 
             self.nullspace_dict[feat_key][model_names[i]]['nulls'] = nulls_
@@ -231,10 +267,11 @@ class Featlin():
 
         return self
 
-    def linearization_plot(self, feat_key, cmap=None):
+    def linearization_plot(self, feat_key, fig=None, axs=None):
         """Calls the linearization plotting function, resulting in a row of three plots for one feature"""
-        fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [7, 2.5, 3]}, figsize=(36,7))
-        self.linearization_regeression_row_plots(feat_key, axs)
+        if axs is None:
+            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]}, figsize=(36,7))
+        axs = self.linearization_regeression_row_plots(feat_key, axs)
         # plt.show()
         return fig, axs
 
@@ -256,13 +293,16 @@ class Featlin():
             marker=self.marker_list[0], markevery=(0, 30),  markersize=9)
 
         # Other regression coefficients
+
+
         keys_models = list(self.nullspace_dict[feat_key].keys())
         model_names = [keys_models[i] for i in range(len(keys_models)) if keys_models[i]!='lfun']
         for j, model_name in enumerate(model_names):
             reg = self.nullspace_dict[feat_key][model_name]['model']
             nrmse_reg = self.nullspace_dict[feat_key][model_name]['nrmse']
+            nrmse_models = 100*mean_squared_error(self.data.X_std@(lin_coef_.reshape(-1)), self.data.X_std@(reg.coef_.reshape(-1)), squared=False)/(np.max(self.data.y_)-np.min(self.data.y_))
             axs[0].plot(
-                self.data.x, reg.coef_.reshape(-1), label=f"{model_names[j]}, NRMSE: {nrmse_reg:.2f} %", lw=2.5, 
+                self.data.x, reg.coef_.reshape(-1), label=f"{model_names[j]}, NRMSE: {nrmse_reg:.2f} %\n NRMSE(PLS, Lin): {nrmse_models}", lw=2.5, 
                 color=self.color_list[np.mod(j+1, len(self.color_list))], 
                 marker=self.marker_list[np.mod(j+1, len(self.marker_list))], 
                 markevery=(5*(j+1), 30), markersize=9)
@@ -273,15 +313,15 @@ class Featlin():
         
         # label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
         # print(label)
-        nulls_ = self.nullspace_dict[feat_key][model_name]['nulls']
-        y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
-        x = self.data.x
-        axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+        #nulls_ = self.nullspace_dict[feat_key][model_name]['nulls']
+        #y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
+        #x = self.data.x
+        #axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
 
         #axs[0].fill_between(
         #    x, nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', 
         #    zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
-        axs[0].legend(loc=3)
+        axs[0].legend(loc='best')
 
         # Middle: Non-linearity check
         # How good is the linear approximation:
@@ -305,7 +345,7 @@ class Featlin():
         plot_pearson_corr_coef_comp(
             feat_nonlin,  self.data.y_, self.cmap, title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[2])
 
-        return
+        return axs
 
 
 def jax_moment(X, power): 
@@ -338,7 +378,7 @@ def plot_linearized_nonlinear_comp(feature_non_lin, feature_linearized, y_train,
     rss = np.sum(np.abs(feature_non_lin - feature_linearized))
 
     for i in range(len(feature_non_lin)):
-        ax.scatter(feature_linearized[i], feature_non_lin[i], color='k', s=100) #color=cmap(y_train_norm[i]),
+        ax.scatter(feature_linearized[i], feature_non_lin[i], color='k', s=120) #color=cmap(y_train_norm[i]),
     
     h1 = ax.scatter(center_taylor, center_taylor, marker="+", s=35**2, linewidths=3,
                     label=r'$\mathbf{a}=\overline{\mathbf{x}}$')
@@ -391,14 +431,15 @@ def plot_pearson_corr_coef_comp(feature_non_lin,  y_train, cmap,
 
     y_train_norm = (y_train-y_train.min())/(y_train.max()-y_train.min())
     for i in range(len(feature_non_lin)):
-        ax.scatter(feature_non_lin[i], y_train[i], color=cmap(y_train_norm[i]), s=100)
+        ax.scatter(feature_non_lin[i], y_train[i], s=120, color='k') # color=cmap(y_train_norm[i]), s=100)
     
-    cb = plt.colorbar(cm.ScalarMappable(norm=mcolors.Normalize(vmin=y_train.min(), vmax=y_train.max(), clip=False), cmap=cmap), ax=ax)
+    # cb = plt.colorbar(cm.ScalarMappable(norm=mcolors.Normalize(vmin=y_train.min(), vmax=y_train.max(), clip=False), cmap=cmap), ax=ax)
     # cb.set_label('Cycle Life', labelpad=10)
 
     h2 = ax.plot([], [], ' ', label=fr'$\rho=${corr_coeff[0, 1]:.2f}')
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
+    
     
     # handles, labels = ax.get_legend_handles_labels()
     # order = [1,0]

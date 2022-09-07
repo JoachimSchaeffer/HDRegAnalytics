@@ -166,11 +166,11 @@ class Nullspace():
         else: 
             self.max_nrmse = max_nrmse
 
-        #print(f'Alpha NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)}')
-        #print(f'Beta NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)}')
-        print(f'Alpha NRMSE: {nrmse_alpha}')
-        print(f'Beta NRMSE: {nrmse_beta}')
-        print(f'Max NRMSE: {self.max_nrmse}')
+        # print(f'Alpha NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)}')
+        # print(f'Beta NRMSE: {mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)}')
+        # print(f'Alpha NRMSE: {nrmse_alpha}')
+        # print(f'Beta NRMSE: {nrmse_beta}')
+        # print(f'Max NRMSE: {self.max_nrmse}')
 
         def objective_gamma(gamma):
             return -gamma
