@@ -1,30 +1,21 @@
 import numpy as np
 from numpy import linalg as LA
-
 from scipy import linalg
-from scipy.linalg import toeplitz
-from scipy.optimize import minimize
-
-# from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_squared_error
-
 import matplotlib.pylab as plt
 import matplotlib.colors as mcolors
 from matplotlib import cm   
 import matplotlib.cm as cmx
 from matplotlib import rc
-# rc('text', usetex=True)
-# rc('text.latex', preamble=r'\usepackage{amsmath}\usepackage{bm}')
-
 import src.helper
-
        
 class Nullspace():
-    """Synthethic Machine Learning Data class. this class inherits from basis (takes Phi and X from basis)
-    This class can generate response variables (y).
+    """Methods to calulate the nullspace correction
+    The nullspace correction is calculated between the two models w_alpha and w_beta. 
+    A certain NRMSE of the prediction of the model is allowed in the nullspace correction. 
     """
+
     def __init__(self, data, **kwargs):
-        self.std = None
         self.weights = {}                 # Dictionary to store weights learned from mean subtracted data X_
         self.nullsp = {}
         self.data = data                  # Should be a BasicsCalss object or duck type
@@ -111,7 +102,6 @@ class Nullspace():
 
         # To keep things simple, standardized weights also included here! 
         # In case std==False this is not efficient, because the standardized coef. aren't used. 
-        # But it's easier to understand and less verbose. 
         if w_alpha is None:
             self.nullsp['w_alpha'] = self.weights[kwargs.get('key_alpha')]
             self.nullsp['w_alpha_std'] = self.weights[kwargs.get('key_alpha') + ' std']
@@ -147,15 +137,6 @@ class Nullspace():
 
         y_ = self.data.y_
 
-        # Simple approach to set gamma
-        # y_range = np.max(y_) - np.min(y_)
-        # min_exp = -5
-        # max_exp = np.floor(np.log10(int((10**2)*y_range)))
-
-        # gamma_vals = np.geomspace(10**(-5), (10**2)*y_range, nb_gammas)
-        # gamma_vals  = np.logspace(min_exp, max_exp, nb_gammas)
-        # gamma_vals = np.append(gamma_vals, [int((10**2)*y_range)])
-        
         nrmse_alpha = 100*mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)/(np.max(y_)-np.min(y_))
         nrmse_beta = 100*mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)/(np.max(y_)-np.min(y_))
         if max_nrmse < 0:
@@ -172,9 +153,6 @@ class Nullspace():
         # print(f'Beta NRMSE: {nrmse_beta}')
         # print(f'Max NRMSE: {self.max_nrmse}')
 
-        def objective_gamma(gamma):
-            return -gamma
-        
         def constraint(gamma, method='NRMSE'):
             # print(f'Gamma: {gamma}')
             n = self.data.X.shape[0]
@@ -210,16 +188,16 @@ class Nullspace():
             self.max_nrmse = cons+self.max_nrmse
             print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
             
-            #con = {'type': 'eq', 'fun': constraint}
-            #solution = minimize(objective_gamma, 5000, method='SLSQP',\
+            # con = {'type': 'eq', 'fun': constraint}
+            # solution = minimize(objective_gamma, 5000, method='SLSQP',\
             #        bounds=[(1, 10**10)], constraints=con)
-            #print(solution.x[0])
-            #print(f'Contraint {constraint(solution.x[0])}')
-            #self.max_gamma = solution.x[0]
+            # print(solution.x[0])
+            # print(f'Contraint {constraint(solution.x[0])}')
+            # self.max_gamma = solution.x[0]
             # y_range = np.max(y_) - np.min(y_)
             # gs_inital = 100*y_range
             # Find value for gamma that 
-            #import scipy as sp
+            # import scipy as sp
             # gamma_upper_limit = sp.optimize.minimize(
             #     find_gamma_, 100, args=(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, max_nrmse),
             #     method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
@@ -237,7 +215,7 @@ class Nullspace():
             self.nullsp['v_'] = np.array(self.nullsp[key_beta]-[self.nullsp[key_alpha]])
             self.nullsp['gamma'] = 0 
             self.max_gamma = np.inf
-        # print(self.max_gamma)
+
         if plot_results:
             fig, ax = self.plot_nullspace_correction(std=std)
             if save_plot:
