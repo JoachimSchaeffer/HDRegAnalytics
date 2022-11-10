@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd 
-
+import time
 import seaborn as sns
 
 import matplotlib.pyplot as plt
@@ -10,9 +10,10 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.linear_model import Ridge
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import cross_val_score
-
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.model_selection import GridSearchCV
 
 import src.basis as basis
 import src.nullspace
@@ -89,9 +90,14 @@ def construct_plot_data_interactive(x_min, x_max, basis_function,
                         num_datapoints=num_datapoints, draws=draws, plot_results=1)
     return None  
 
-def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Train', zorder=1): 
+def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Train', zorder=1, **kwargs): 
     """Plot Data"""
-    ax.plot(x, X[:, :].T, label=label_data, lw=1, color=color, zorder=zorder)
+    # Get linestyle kwarg if it exists
+    if 'linestyle' in kwargs:
+        linestyle = kwargs['linestyle']
+    else:
+        linestyle = '-'
+    ax.plot(x, X[:, :].T, linestyle, label=label_data, lw=1, color=color, zorder=zorder)
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc=4)
@@ -125,7 +131,7 @@ def plot_corrheatmap(ax, x, X, cmap, label, title, cols=True):
     else:
         ax = sns.heatmap(
             X_corr, 
-            vmin=0.7, vmax=1, center=0.85,
+            vmin=0.82, vmax=1, center=0.91,
             cmap=cmap,
             square=True,
             xticklabels=10,
@@ -183,8 +189,218 @@ def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, std=False):
     return src.nullspace.nullspace_correction(w_alpha, w_beta, X, x, gs=gs, comp_block=0)
 
 
-def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=False, min_distance_search=False, featlin=[]):
-    """Crossvalidation of PLS algorithm and plotting of results. 
+def optimize_pls(X, y, max_comps=20, folds=10, nb_stds=1, min_distance_search=False, 
+        featlin=0, **kwargs):
+    """Optimize the number of components for PLS regression."""
+
+    components = np.arange(1, max_comps + 1).astype('uint8')
+    rmse = np.zeros((len(components), ))
+    stds = np.zeros((len(components), ))
+    dist_l2 = []
+    # Loop through all possibilities
+    for comp in components:
+        pls = PLSRegression(n_components=comp, scale=False)
+                            
+        # Cross-validation: Predict the test samples based on a predictor that was trained with the 
+        # remaining data. Repeat until prediction of each sample is obtained.
+        # (Only one prediction per sample is allowed)
+        # Only these two cv methods work. Reson: Each sample can only belong to EXACTLY one test set. 
+        # Other methods of cross validation might violate this constraint
+        # For more information see: 
+        # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_predict.html
+        scores = cross_val_score(pls, X, y, cv=folds, n_jobs=-1, scoring='neg_root_mean_squared_error')
+        rmse[comp - 1] = -scores.mean()
+        stds[comp - 1] = scores.std()
+
+        if min_distance_search: 
+            # Find the PLS vector that has minimal L2 distance to the featlin vector.
+            # Comparing these two vector can subsequently tell us, whether we're close and the feature should be considered or not.
+            pls = PLSRegression(n_components=comp, scale=False)
+            reg = pls.fit(X, y)  
+            diff_vec = featlin-reg.coef_.reshape(-1)
+            dist_l2.append(np.linalg.norm(diff_vec, ord=2))
+
+    if min_distance_search: 
+        dist_l2 = np.array(dist_l2)
+        l2_min_loc = np.argmin(dist_l2)
+        l2_dist_min_comp = components[l2_min_loc]
+    
+    rmsemin_loc = np.argmin(rmse)
+    rmsemin_param = components[rmsemin_loc]
+    
+    # Extract the components that are within the standard deviation of the minimum
+    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+(nb_stds*stds[rmsemin_loc])]
+    rmse_std_min_loc, rmse_std_min = min(filtered_lst)
+    rmse_std_min_param = components[rmse_std_min_loc]
+
+    # Train model with optimal number of components
+    pls = PLSRegression(n_components=rmsemin_param, scale=False)
+    reg = pls.fit(X, y)
+    # Extract the coefficients
+    coef_cv = reg.coef_
+
+    # Train model with std min number of components
+    pls = PLSRegression(n_components=rmse_std_min_param, scale=False)
+    reg = pls.fit(X, y)
+    # Extract the coefficients
+    coef_std_cv = reg.coef_
+
+    cv_res_dict = {'rmse_vals': rmse, 'rmse_std': stds, 'components': components, 
+        'rmse_std_min': rmse_std_min, 'rmse_std_min_param': rmse_std_min_param, 'rmse_min_param': rmsemin_param,
+        'ceof_std_cv': coef_std_cv, 'coef_cv': coef_cv}
+
+    # Train the model with min distance number of components
+    if min_distance_search:
+        pls = PLSRegression(n_components=l2_dist_min_comp, scale=False)
+        reg = pls.fit(X, y)
+        # Extract the coefficients
+        coef_min_dist = reg.coef_
+
+    if min_distance_search: 
+        dist_l2_res_dict = {'l2_distance': dist_l2, 'l2_min_param': l2_dist_min_comp, 
+            'l2_min_loc': l2_min_loc, 'components': components, 'coef_min_dist': coef_min_dist}
+        return {'cv_res': cv_res_dict, 'l2_distance_res': dist_l2_res_dict, 'algorithm': 'PLS'}
+    return {'cv_res': cv_res_dict, 'algorithm': 'PLS'}
+
+
+def optimize_rr(X, y, alpha_lim=[10e-5, 10e3], folds=5, nb_stds=1, plot=False, min_distance_search=True, std=False, featlin=[]):
+    """Crossvalidation of RR algorithm and plotting of results"""
+    nb_iterations = 15
+    nb_selected_values = 8
+    rmse = []
+    stds = []
+    alphas = []
+
+    if std: 
+        X = StandardScaler().fit_transform(X)
+    alpha_lim_cv = alpha_lim
+    # Refine iteratively, by cutting the search space in half
+    for i in range(nb_iterations): 
+        # Define the search space by selecting 4 alpha values, equally spaced in log space
+        if i == 0:
+            alpha = np.logspace(np.log10(alpha_lim_cv[0]), np.log10(alpha_lim_cv[1]), nb_selected_values)
+        else:
+            alpha = np.logspace(np.log10(alpha_lim_cv[0]), np.log10(alpha_lim_cv[1]), nb_selected_values-2)
+        alphas.append(alpha)
+        # Define the cross validation
+        cv = KFold(n_splits=folds, shuffle=True, random_state=42)
+        # Define the model
+        ridge = Ridge()
+        # Define the grid search
+        grid = GridSearchCV(estimator=ridge, param_grid=dict(alpha=alpha), cv=cv, scoring='neg_mean_squared_error')
+        # Fit the grid search
+        grid.fit(X, y)
+        # Obtain all the results
+        results = grid.cv_results_
+        rmse.append(np.sqrt(-results['mean_test_score']))
+        stds.append(results['std_test_score'])
+
+        # Obtain the two alpha values with the lowest mean test score
+        idx = np.argpartition(-results['mean_test_score'], 2)
+
+        alpha_lim_cv = [results['param_alpha'][idx[0]], results['param_alpha'][idx[1]]]
+        # Sort the two alpha values
+        alpha_lim_cv.sort()
+
+        # If the two alpha values are close enough, stop the search
+        print(f'Iteration: {i} done')
+
+        # Break if the relative difference between the two rmse values associated with the two alpha values is small enough
+        if np.abs(rmse[i][idx[0]]-rmse[i][idx[1]])/np.max([rmse[i][idx[0]], rmse[i][idx[1]]]) < 0.001:
+            print(f'Converged after {i} iterations')
+            break
+    alphas_cv = np.concatenate(alphas, axis=0)
+    rmse_cv = np.concatenate(rmse, axis=0)
+    stds_cv = np.concatenate(stds, axis=0)
+    rmsemin_loc_cv = np.argmin(rmse_cv)
+    id_min_cv = np.argmin(rmse_cv)
+    alpha_opt_cv = alphas_cv[id_min_cv]
+    nb_stds = 1 
+
+    filtered_lst = [(i, element) for i,element in zip(alphas_cv, rmse_cv) if element < rmse_cv[rmsemin_loc_cv]+(nb_stds*stds_cv[rmsemin_loc_cv])]
+    _, rmse_std_min = max(filtered_lst)
+    # Return the alpha value corresponding to the std rule from the filtered list
+    # index of the alpha value corresponding to the std rule
+    idx = [i for i,element in enumerate(rmse_cv) if element == rmse_std_min][0]
+    alpha_std_opt_cv = alphas_cv[idx]
+
+    # Train the model with the optimal alpha value
+    ridge = Ridge(alpha=alpha_opt_cv)
+    ridge.fit(X, y)
+    # Obtain the coefficients
+    coef_cv = ridge.coef_
+    # Train the model with the optimal std alpha value
+    ridge = Ridge(alpha=alpha_std_opt_cv)
+    ridge.fit(X, y)
+    # Obtain the coefficients
+    coef_std_cv = ridge.coef_
+
+    cv_res_dict = {'rmse_vals': rmse_cv, 'rmse_std': stds_cv, 'alphas':alphas_cv, 
+        'rmse_std_min': rmse_std_min, 'rmse_std_min_param': alpha_std_opt_cv, 'rmse_min_param': alpha_opt_cv,
+        'ceof_std_cv': coef_std_cv, 'coef_cv': coef_cv}
+
+    # Rerun the entire loops if the min distance search is required
+    # Unfortunately, this is not very efficient, but necessary fro now to obtain the min distance
+    # TODO: find a way to optimize this
+    if min_distance_search: 
+        alphas_l2 = []
+        dist_l2 = []
+        # Define the search space by selecting 4 alpha values, equally spaced in log space
+        alphas_ = np.logspace(np.log10(alpha_lim[0]), np.log10(alpha_lim[1]), nb_selected_values)
+
+        for i in range(nb_iterations): 
+            alphas_l2.append(alphas_)
+            # Define the cross validation
+            cv = KFold(n_splits=folds, shuffle=True, random_state=42)
+            # Define the model
+            ridge = Ridge()
+            # Minimum distance search
+            for j, a in enumerate(alphas_):
+                ridge = Ridge(alpha=a)
+                ridge.fit(X, y)
+                # y_hat = ridge.predict(X)
+                diff_vec = featlin-ridge.coef_.reshape(-1)
+                dist_l2_= np.linalg.norm(diff_vec, ord=2)
+                try:
+                    if dist_l2_ <= np.min(dist_l2):
+                        min_dist_alpha = a
+                except:
+                    min_dist_alpha = -999
+                dist_l2.append(dist_l2_)
+            # Define the new grid
+            # Sort the dist_l2s of the last iteration
+            sorted_norms = np.sort(dist_l2[-j:])
+            try:
+                alpha_min = alphas_[np.where(dist_l2[-j:]==sorted_norms[0])[0][0]-2]
+            except:
+                alpha_min = alphas_[np.where(dist_l2[-j:]==sorted_norms[0])[0][0]]
+            # Making it more robust to look into a space that is a bit larger than just between the wo best values. 
+            try:
+                alpha_min3 = alphas_[np.where(dist_l2[-j:]==sorted_norms[1])[0][0]+2]
+            except:
+                alpha_min3 = alphas_[np.where(dist_l2[-j:]==sorted_norms[3])[0][0]]
+            alphas_ = np.geomspace(alpha_min, alpha_min3, num=nb_selected_values)
+
+        l2_alphas = np.concatenate(alphas_l2, axis=0)
+        dist_l2 = np.array(dist_l2)
+        l2_min_loc = np.argmin(dist_l2)
+        # Train the model with the min dist alpha value
+        ridge = Ridge(alpha=min_dist_alpha)
+        ridge.fit(X, y)
+        # Obtain the coefficients
+        coef_min_dist = ridge.coef_
+    
+        dist_l2_res_dict = {'alphas': l2_alphas, 'l2_distance': dist_l2, 'l2_min_param': min_dist_alpha, 
+            'l2_min_loc': l2_min_loc, 'coef_min_dist': coef_min_dist}
+        return {'cv_res': cv_res_dict, 'l2_distance_res': dist_l2_res_dict, 'algorithm': 'RR'}
+
+    return {'cv_res': cv_res_dict, 'algorithm': 'RR'}
+
+def optimize_cv(
+        X, y, max_comps=20, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, 
+        plot_components=False, std=False, min_distance_search=False, 
+        featlin=0, algorithm='PLS', **kwargs):
+    """Crossvalidation or optimization of regression coefficient distance for PLS or RR
     
     Parameters
     ----------
@@ -196,6 +412,8 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
         maximum number of PLS components for cv
     folds : int, default=10
         number of folds for crossvalidation
+    nb_stds : int, default=1
+        Choose highest regularization, where rms is still < rmse[rmsemin_loc]+nb_stds*stds[rmsemin_loc]
     plot_components : bool, default=False
         Indicate whether to plot results
     std : bool, default=False
@@ -209,64 +427,63 @@ def optimise_pls_cv(X, y, max_comps=20, folds=10, plot_components=False, std=Fal
         list of components tested for cv
     """
     
-    components = np.arange(1, max_comps + 1).astype('uint8')
-    rmse = np.zeros((len(components), ))
-    stds = np.zeros((len(components), ))
-    l2_distance = np.zeros((len(components), ))
     if std: 
         X = StandardScaler().fit_transform(X)
 
-    # Loop through all possibilities
-    for comp in components:
-        pls = PLSRegression(n_components=comp, scale=False)
-                            
-        # Cross-validation: Predict the test samples based on a predictor that was trained with the 
-        # remaining data. Repeat until prediction of each sample is obtained.
-        # (Only one prediction per sample is allowed)
-        # Only these two cv methods work. Reson: Each sample can only belong to EXACTLY one test set. 
-        # Other methods of cross validation might violate this constraint
-        # For more information see: 
-        # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_predict.html
-        scores = cross_val_score(pls, X, y, cv=folds, n_jobs=-1, scoring='neg_mean_squared_error')
-        rmse[comp - 1] = -scores.mean()
-        stds[comp - 1] = scores.std()
-        if min_distance_search: 
-            # Find the PLS vector that has minimal L2 distance to the featlin vector.
-            # Comparing these two vector can subsequently tell us, whether we're close and the feature should be considered or not.
-            reg = pls.fit(X-np.mean(X, axis=0), y-y.mean())
-            diff_vec = featlin-reg.coef_.reshape(-1)
-            l2_distance[comp - 1] = np.linalg.norm(diff_vec, 1)
-    
-    if min_distance_search: 
-        l2_min_loc = np.argmin(l2_distance)
+    if algorithm=='PLS':
+        res_dict = optimize_pls(X, y, max_comps=max_comps, folds=folds, nb_stds=nb_stds, 
+        plot_components=plot_components, std=std, min_distance_search=min_distance_search, 
+        featlin=featlin, **kwargs)
+ 
+    elif algorithm=='RR':
+        res_dict = optimize_rr(X, y, alpha_lim=alpha_lim, folds=folds, nb_stds=nb_stds, 
+        std=std, min_distance_search=min_distance_search, 
+        featlin=featlin, **kwargs)
 
-    rmsemin_loc = np.argmin(rmse)
-    # Minimum number of componets where rms is still < rmse[rmsemin_loc]+stds[rmsemin_loc]
-    nb_stds = 1 
-
-    filtered_lst = [(i, element) for i,element in enumerate(rmse) if element < rmse[rmsemin_loc]+(nb_stds*stds[rmsemin_loc])]
-    rmse_std_min, _ = min(filtered_lst)
-    if plot_components is True:
-        with plt.style.context(('ggplot')):
-            fig, ax = plt.subplots(figsize=(9,6))
-            ax.plot(components, rmse, '-o', color = 'blue', mfc='blue', label='Mean RMSE')
-            ax.plot(components, rmse-stds, color = 'k', label='Mean RMSE - 1 std')
-            ax.plot(components, rmse+stds, color = 'k', label='Mean RMSE + 1 std')
-            ax.plot(components[rmsemin_loc], rmse[rmsemin_loc], 'P', ms=10, mfc='red', label='Lowest RMSE')
-            ax.plot(components[rmse_std_min], rmse[rmse_std_min], 'P', ms=10, mfc='green', label=f'Within {nb_stds} std of best numebr of comp.')
-            if min_distance_search: 
-                ax.plot(components[l2_min_loc], rmse[l2_min_loc], 'P', ms=10, mfc='black', label='Smallest L1 distance to passed feature')
-            ax.set_xticks(components)
-            ax.set_xlabel('Number of PLS components')
-            ax.set_ylabel('RMSE')
-            ax.set_title('PLS Crossvalidation')
-            ax.set_xlim(left=0.5)
-            ax.legend()
-    
-    res_dict = {
-        'rmse_vals': rmse, 'components': components, 'rmse_std_min': rmse_std_min, 
-        'l2_distance': np.array(l2_distance)}
+    # If kwarg plot is TRUE, plot the results
+    if kwargs.get('plot', True):
+        key = 'components' if algorithm=='PLS' else 'alphas'
+        plot_cv_results(res_dict, key=key)
     return res_dict
+
+
+def plot_cv_results(res_dict, key='components'):
+    """Plot the results of the cross validation function"""
+    colors_IBM = ['#648fff', '#785ef0', '#dc267f', '#fe6100', '#ffb000',  '#000000']
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+    ax[0].scatter(res_dict['cv_res'][key], res_dict['cv_res']['rmse_vals'], color = 'blue', label='RMSE')
+    ax[0].scatter(res_dict['cv_res'][key], res_dict['cv_res']['rmse_vals']+res_dict['cv_res']['rmse_std'], color = 'k', label='RMSE + STD')
+    ax[0].scatter(res_dict['cv_res'][key], res_dict['cv_res']['rmse_vals']-res_dict['cv_res']['rmse_std'], color = 'k')
+    # Scatter a circle around the minimum
+    ax[0].scatter(res_dict['cv_res']['rmse_min_param'], np.min(res_dict['cv_res']['rmse_vals']), color=colors_IBM[1], s=100)
+    # Scatter a circle around the mean rmse that is still within 1 std of the minimum
+    ax[0].scatter(res_dict['cv_res']['rmse_std_min_param'], res_dict['cv_res']['rmse_std_min'], color=colors_IBM[2], s=100)
+    
+
+    ax[0].set_xlabel(f'Number of {key}')
+    ax[0].set_ylabel('RMSE')
+    ax[0].set_title(f'RMSE vs. Number of {key}')
+    ax[0].legend()
+    
+    ax[1].scatter(res_dict['l2_distance_res'][key], res_dict['l2_distance_res']['l2_distance'], color=colors_IBM[0], label='L2 Distance')
+    # Scatter a circle around the minimum
+    min_l2_alpha = res_dict['l2_distance_res']['l2_min_param']
+    min_l2_dist = np.min(res_dict['l2_distance_res']['l2_distance'])
+    ax[1].scatter(min_l2_alpha, min_l2_dist, 
+        color=colors_IBM[1], s=100, label=f'Min. L2 Dist. {min_l2_dist:.2f} {key} {min_l2_alpha:.2f}')
+    ax[1].set_xlabel(f'Number of {key}')
+    ax[1].set_ylabel('L2 Distance')
+    ax[1].set_title(f'L2 Distance vs. Number of {key}')
+    ax[1].legend()
+    
+    # Set axes log scale if the key is alpha
+    if key == 'alphas':
+        ax[0].set_xscale('log')
+        ax[1].set_xscale('log')
+        ax[0].set_xlabel(f'RR alpha')
+        ax[1].set_xlabel(f'RR alpha')
+    plt.tight_layout()
+    plt.show()
 
 def optimize_regcoef_nrmse(model, X, y, regularization_limits, lin_coef_, max_depth=10): 
     '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
@@ -292,7 +509,7 @@ def optimize_regcoef_nrmse(model, X, y, regularization_limits, lin_coef_, max_de
             for i, alpha in enumerate(alphas):
                 model = Ridge(alpha=alpha)
                 model.fit(X-np.mean(X, axis=0), y-y.mean())
-                # Constant factore deleted. MSE Sufficient here.
+                # Constant factor deleted. MSE Sufficient here.
                 pred_error[i] = mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)
             pre1, pre2 = np.partition(pred_error, 2)[0:2]
             id1 = np.where(pred_error==pre1)[0][0]
@@ -385,4 +602,3 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))
     return new_cmap
-

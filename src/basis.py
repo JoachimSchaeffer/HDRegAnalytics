@@ -204,8 +204,8 @@ class BasicsData():
 
     def plot_stats(self, ax, c1, c2, c3, labelx, labely):
         ax.plot(self.x, np.abs(np.mean(self.X, axis=0)), label='|Mean|', lw=2.5, color=c1)
-        ax.plot(self.x, np.abs(np.median(self.X, axis=0)), label='|Median|', lw=2.5, color=c3)
-        ax.plot(self.x, np.std(self.X, axis=0), label='Std.', lw=2.5, color=c2)
+        ax.plot(self.x, np.abs(np.median(self.X, axis=0)), '--', label='|Median|', lw=2.5, color=c3)
+        ax.plot(self.x, np.std(self.X, axis=0), '-.', label='Std.', lw=2.5, color=c2)
         ax.legend(loc=2)
         ax.set_xlabel(labelx)
         ax.set_ylabel(labely)

@@ -5,6 +5,7 @@ Subsequently finding a constant term via regeression to match the metdoch
 """
 
 # Packages
+from audioop import mul
 import numpy as np
 import pandas as pd
 
@@ -24,7 +25,7 @@ import copy
 from src.basis import BasicsData
 from src.nullspace import Nullspace
 
-from src.helper import optimise_pls_cv
+from src.helper import optimize_cv
 from src.helper import optimize_regcoef_nrmse
 from src.helper import optimize_regcoef_dist
 
@@ -114,7 +115,13 @@ class Featlin():
         m = reg.coef_
         b = reg.intercept_
         linearized_coef = m * gradient(a)
+        # The constant coefficient should be equal to the mean of y
         linearized_const_coef = m*fun(a) + b
+        # Test whether the constant coefficient is equal to the mean of y with a tolerance of 1% of the mean of y
+        assert np.isclose(linearized_const_coef, np.mean(y), rtol=0.01), \
+            f"Linearized constant coefficient is not equal to the mean of y \
+              with a tolerance of 1% of the mean of y. Linearized constant coefficient: \
+              {linearized_const_coef}, mean of y: {np.mean(y)}"
         
         if std:
             lin_coef = np.array(linearized_coef)*np.std(X, axis=0)
@@ -124,9 +131,10 @@ class Featlin():
         return x_hat, lin_coef, np.array(linearized_const_coef)
     
     def analyse_all_features(
-        self, opt_nrmse={'active':True}, 
+        self, 
+        opt_nrmse={'active':True, 'model': 'PLS', 'max_comp':10}, 
         opt_dist={'active':False}, max_nrmse=1, 
-        fig_props={'save':False}, std=False):
+        fig_props={'save':False, 'multiple_fig': True}, std=False):
         """Analyses all Features"""
 
         if not fig_props['multiple_fig']: 
@@ -156,6 +164,7 @@ class Featlin():
         
         return self
 
+    # ToDo: Needs to be updated!
     def analyse_feature(self, feat_key, std=False,
         cv=0, include_cv_model=0, opt_nrmse=0, opt_dist={'active':False},
         plot_cv=0, max_nrmse=1):
@@ -184,7 +193,7 @@ class Featlin():
 
         # CV only if feature is linear!
         if cv:
-            cv_dict = optimise_pls_cv(
+            cv_dict = optimize_cv(
                 X, y, max_comps=10, plot_components=plot_cv, std=False, min_distance_search=True, featlin=lin_coef_)
             rmse_min_comp = cv_dict['components'][cv_dict['rmse_std_min']]
             if include_cv_model:
@@ -447,3 +456,68 @@ def plot_pearson_corr_coef_comp(feature_non_lin,  y_train, cmap,
     ax.grid()
 
     return
+
+
+def regression_coef_trajectory( 
+    alpha: float, nb_comp: int, rr: bool, pls: bool, x: np.ndarray, X: np.ndarray,
+    std: bool, y_selection: str, cv_pls=True, cv_rr=True, mind_pls=False, mind_rr=False):
+    """Explorative plot. Comparison of the linearized feature coefficients and learned coefficients.
+    If you want to plot the cv coeff and mind_dist_coeff, you need to pass these explicitly.
+    This function can be called via ipywidgets interact function.
+
+    Args:
+        alpha (float): Regularization parameter
+    """
+
+    X = (X - np.mean(X, axis=0))
+    if std:
+        X = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+        # y = (y - np.mean(y, axis=0)) / np.std(y, axis=0)
+
+    if y_selection == 'Polynomial':
+        x_hat, lin_coef_, lin_const_coef = lfp_poly.regress_linearized_coeff(lfp_poly.feat_fun_dict['Polynomial Combination'], std=std)
+        y = copy.deepcopy(lfp_poly.data.y_)
+    elif y_selection == 'Sinus':
+        x_hat, lin_coef_, lin_const_coef = lfp_sin.regress_linearized_coeff(lfp_sin.feat_fun_dict['Sinus Transformation'], std=std)
+        y = copy.deepcopy(lfp_sin.data.y_)
+    elif y_selection == 'Sum of Squares':
+        x_hat, lin_coef_, lin_const_coef = lfp_sums.regress_linearized_coeff(lfp_sums.feat_fun_dict['Sum of Squares'], std=std)
+        y = copy.deepcopy(lfp_sums.data.y_)
+
+    # Create a figure with two subplots left coefficeints, right scatter plot of predictions
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18,6))
+    ax1.plot(x, lin_coef_, color=colors_IBM[0], label='Linearized Coefficients')
+    if rr:
+        ridge = Ridge(alpha=alpha)
+        ridge.fit(X, y)
+        ax1.plot(x, ridge.coef_, color=colors_IBM[2], label='Ridge Regression Coefficients')
+    if pls:
+        pls = PLSRegression(n_components=nb_comp, tol=1e-7, scale=False)
+        pls.fit(X, y)
+        ax1.plot(x, pls.coef_, color=colors_IBM[4], label='PLS Regression Coefficients')
+
+    if rr:
+        y_hat_rr = ridge.predict(X)
+        # Calculate rmse for ridge regression with the sklearn function
+        rmse_rr = np.sqrt(mse(y, y_hat_rr))
+        ax2.scatter(y, y_hat_rr, color=colors_IBM[2], label=f'Ridge Regression, RMSE = {rmse_rr:.3f}')
+    if pls:
+        y_hat_pls = pls.predict(X)
+        # Calculate rmse for PLS
+        rmse_pls = np.sqrt(mse(y, y_hat_pls))
+        ax2.scatter(y, y_hat_pls, color=colors_IBM[4], label=f'PLS Regression, RMSE = {rmse_pls:.3f}')
+
+    ax1.set_xlabel(labels_lfp['xdata_label'])
+    ax1.set_ylabel(labels_lfp['ydata_label'])
+    ax1.set_title('Ridge Regression Coefficients')
+    ax1.legend()
+    
+    ax2.set_xlabel(labels_lfp['ydata_label']+ 'True')
+    ax2.set_ylabel(labels_lfp['ydata_label']+ ' Predicted')
+    ax2.set_title('Predictions')
+    ax2.legend()
+
+    if show_plot:
+        plt.show()
+    else: 
+        return fig, (ax1, ax2)
