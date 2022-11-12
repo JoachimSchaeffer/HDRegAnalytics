@@ -26,7 +26,6 @@ from src.basis import BasicsData
 from src.nullspace import Nullspace
 
 from src.helper import optimize_cv
-from src.helper import optimize_regcoef_nrmse
 from src.helper import optimize_regcoef_dist
 
 import jax.numpy as jnp
@@ -84,12 +83,14 @@ class Featlin():
         self.results = pd.DataFrame(columns=columns)   # Filling with fresults from the run. Overview!
 
         # Making plotting stuff a lot easier by setting some color combinations
-        colors = ['#332bb3', '#4a31b5', '#5d37b6', '#6d3db7', '#7c43b7', '#8a49b6', '#964fb5', '#a256b3', '#ad5db1', '#b764b0', '#c16cae', '#ca75ad', '#d27eac', '#d989ab', '#e094aa', '#e7a1ab', '#ecafac', '#f0beae', '#f4cfb0', '#f6e1b4']
+        # colors = ['#332bb3', '#4a31b5', '#5d37b6', '#6d3db7', '#7c43b7', '#8a49b6', '#964fb5', '#a256b3', '#ad5db1', '#b764b0', '#c16cae', '#ca75ad', '#d27eac', '#d989ab', '#e094aa', '#e7a1ab', '#ecafac', '#f0beae', '#f4cfb0', '#f6e1b4']
+        colors = ['#332288', '#117733', '#44AA99', '#88CCEE', '#DDCC77', '#CC6677', '#AA4499', '#882255']
         colors_IBM = ['#648fff', '#785ef0', '#dc267f', '#fe6100', '#ffb000',  '#000000']
         self.cmap_ = clr.LinearSegmentedColormap.from_list('Blue-light cb-safe', colors, N=256)
         self.cmap = clr.LinearSegmentedColormap.from_list('Blue-light cb-IBM', colors_IBM[:-1], N=256)
         # color_list = ['#0051a2', '#97964a', '#f4777f', '#93003a']
-        self.color_list = [colors_IBM[0], colors_IBM[2], colors_IBM[3], colors_IBM[4], colors_IBM[5]]
+        # self.color_list = [colors_IBM[0], colors_IBM[2], colors_IBM[3], colors_IBM[4], colors_IBM[5]]
+        self.color_list = colors[::-1] + colors
         self.marker_list = ['s', 'o', 'D', 'P']
 
     def regress_linearized_coeff(self, fun, std=False):
@@ -132,7 +133,7 @@ class Featlin():
     
     def analyse_all_features(
         self, 
-        opt_nrmse={'active':True, 'model': 'PLS', 'max_comp':10}, 
+        opt_cv={'active':True, 'max_comp':10}, 
         opt_dist={'active':False}, max_nrmse=1, 
         fig_props={'save':False, 'multiple_fig': True}, std=False):
         """Analyses all Features"""
@@ -144,8 +145,7 @@ class Featlin():
             #    )
 
         for i, key in enumerate(self.nullspace_dict.keys()): 
-            self.analyse_feature(key, cv=0, include_cv_model=1, opt_nrmse=opt_nrmse, opt_dist=opt_dist,
-                plot_cv=0, max_nrmse=max_nrmse, std=std)
+            self.analyse_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0)
             if fig_props['multiple_fig']:
                 fig, ax = self.linearization_plot(key)
                 if fig_props['save']: 
@@ -164,19 +164,18 @@ class Featlin():
         
         return self
 
-    # ToDo: Needs to be updated!
     def analyse_feature(self, feat_key, std=False,
-        cv=0, include_cv_model=0, opt_nrmse=0, opt_dist={'active':False},
+        opt_cv={'active':True, 'model': []}, opt_dist={'active':True, 'model': ['PLS', 'RR']},
         plot_cv=0, max_nrmse=1):
         ''' Function to anlayse features given certain data! (: '''
 
         # PLS 1 model is always selected as a reference. 
         # Models
         models = [
-            #PLSRegression(n_components=1, tol=1e-7, scale=False)
+            PLSRegression(n_components=2, tol=1e-7, scale=False)
         ]
         model_names = [
-            #'PLS 1 comp'
+            'PLS 2 comp'
         ]
         # List of results, should be in the same order as the pandas dataframe.
         results = []
@@ -190,50 +189,46 @@ class Featlin():
         # Calculate the feature and linearized coef.
         x_hat, lin_coef_, lin_const_coef = self.regress_linearized_coeff(self.feat_fun_dict[feat_key], std=std)
         nrmse_linfeat = 100*mean_squared_error(y, X@(lin_coef_.reshape(-1)), squared=False)/(np.max(y)-np.min(y))
+        
+        # These if statements could be improved, for speed, but it works for now
+        cv_dict_pls = optimize_cv(
+            X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='PLS',
+            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_)
+        cv_dict_rr = optimize_cv(
+            X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='RR',
+            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_)
 
-        # CV only if feature is linear!
-        if cv:
-            cv_dict = optimize_cv(
-                X, y, max_comps=10, plot_components=plot_cv, std=False, min_distance_search=True, featlin=lin_coef_)
-            rmse_min_comp = cv_dict['components'][cv_dict['rmse_std_min']]
-            if include_cv_model:
-                models.append(PLSRegression(n_components=rmse_min_comp, tol=1e-7, scale=False))
-                model_names.append('PLS ' + str(rmse_min_comp) + ' comp')
+        if 'PLS' in opt_cv['model']:
+            rmse_min_comp = cv_dict_pls['cv_res']['rmse_min_param']
+            models.append(PLSRegression(n_components=rmse_min_comp, tol=1e-7, scale=False))
+            model_names.append('PLS ' + str(rmse_min_comp) + ' comp')
 
-        # Not a good idea. We can always find a model with a lower acc. than the optimal acc for the modeltype. 
-        # Thus we can match linearized accuracies arbitrarily well.
-        if opt_nrmse['active']:
-            if opt_nrmse['model']=='PLS':
-                max_comp = opt_nrmse['max_comp']
-                comp = optimize_regcoef_nrmse('PLS', X, y, [max_comp], lin_coef_, max_depth=10)
-                models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
-                model_names.append(f"PLS {comp} comp")
-            elif opt_nrmse['model']=='ridge':
-                alpha = optimize_regcoef_nrmse('ridge', X, y, [10**5, 10**(-5)], lin_coef_, max_depth=10)
-                models.append(Ridge(alpha=alpha))
-                model_names.append(f"RR: {alpha:.5f}")
-            else:
-                raise NotImplementedError(f'Passed model not implemented')
+        if 'PLS' in opt_dist['model']:
+            comp = cv_dict_pls['l2_distance_res']['l2_min_param']
+            # Legacy: 
+            # comp = optimize_regcoef_dist('PLS', X, y, [10], lin_coef_, norm=opt_dist['norm'], max_depth=10)
+            # Ensures that this is the last list item by removing previous identical entries. 
+            if f"PLS {comp} comp" in model_names:
+                id = model_names.index(f"PLS {comp} comp")
+                model_names.remove(f"PLS {comp} comp")
+                print(f"popping model with {id}")
+                models.pop(id)
+                # models.remove(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+            models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
+            model_names.append(f"PLS {comp} comp")
 
-        if opt_dist['active']:
-            if opt_dist['model']=='PLS': 
-                comp = optimize_regcoef_dist('PLS', X, y, [10], lin_coef_, norm=opt_dist['norm'], max_depth=10)
-                # Ensures that this is the last list item by removing previous identical entries. 
-                if f"PLS {comp} comp" in model_names:
-                    id = model_names.index(f"PLS {comp} comp")
-                    model_names.remove(f"PLS {comp} comp")
-                    print(f"popping model with {id}")
-                    models.pop(id)
-                    # models.remove(PLSRegression(n_components=comp, tol=1e-7, scale=False))
-                models.append(PLSRegression(n_components=comp, tol=1e-7, scale=False))
-                model_names.append(f"PLS {comp} comp")
-            elif opt_dist['model']=='ridge': 
-                alpha = optimize_regcoef_dist('ridge', X, y, [10**5, 10**(-5)], lin_coef_, norm=opt_dist['norm'], max_depth=10)
-                models.append(Ridge(alpha=alpha))
-                model_names.append(f"RR: {alpha:.5f}")
-            else:
-                raise NotImplementedError(f'Passed model not implemented')
+        if 'RR' in opt_cv['model']:
+            alpha_min_rmse = cv_dict_rr['cv_res']['rmse_min_param']
+            models.append(Ridge(alpha=alpha_min_rmse))
+            model_names.append('RR ' + str(alpha_min_rmse))
 
+        if 'RR' in opt_dist['model']:
+            alpha = cv_dict_rr['l2_distance_res']['l2_min_param']
+            # Legacy:
+            # alpha = optimize_regcoef_dist('ridge', X, y, [10**5, 10**(-5)], lin_coef_, norm=opt_dist['norm'], max_depth=10)
+            models.append(Ridge(alpha=alpha))
+            model_names.append(f"RR: {alpha:.5f}")
+    
         model_names.append('lfun')
         self.nullspace_dict[feat_key] = dict.fromkeys(model_names)
         self.nullspace_dict[feat_key]['lfun'] = dict.fromkeys(['feature_fun', 'lin_coef', 'nrmse'])
@@ -243,6 +238,8 @@ class Featlin():
         self.nullspace_dict[feat_key]['lfun']['x_hat'] = x_hat
         print(model_names)
 
+        # Analyze the nullspace of the feature function
+        # BROKEN ATM! for some reason the models are not added...
         for i, model in enumerate(models):
             results.append(model_names[i])
             reg = model.fit(X, y)
@@ -279,12 +276,12 @@ class Featlin():
     def linearization_plot(self, feat_key, fig=None, axs=None):
         """Calls the linearization plotting function, resulting in a row of three plots for one feature"""
         if axs is None:
-            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]}, figsize=(36,7))
+            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(24,5.3))
         axs = self.linearization_regeression_row_plots(feat_key, axs)
         # plt.show()
         return fig, axs
 
-    def linearization_regeression_row_plots(self, feat_key, axs, label_dict={'xlabel' :'xlabel'}): 
+    def linearization_regeression_row_plots(self, feat_key, axs, label_dict={'xlabel' :'Voltage (V)'}): 
         """Plot a row of 3 subplots. 
         1: Regression coefficients 
         2: Linearization Analysis
@@ -297,40 +294,46 @@ class Featlin():
         nrmse_linfeat = self.nullspace_dict[feat_key]['lfun']['nrmse']
         axs[0].plot(
             self.data.x, lin_coef_.reshape(-1), 
-            label='Linearized Weights' +f" NRMSE: {nrmse_linfeat:.2f} %", 
-            lw=2.5, color=self.color_list[0], 
-            marker=self.marker_list[0], markevery=(0, 30),  markersize=9)
+            label='Linearized Weights' +f" NRMSE: {nrmse_linfeat:.2f}%", color='k')
+            # marker=self.marker_list[0], markevery=(0, 30),  markersize=9)
 
         # Other regression coefficients
-
 
         keys_models = list(self.nullspace_dict[feat_key].keys())
         model_names = [keys_models[i] for i in range(len(keys_models)) if keys_models[i]!='lfun']
         for j, model_name in enumerate(model_names):
             reg = self.nullspace_dict[feat_key][model_name]['model']
             nrmse_reg = self.nullspace_dict[feat_key][model_name]['nrmse']
-            nrmse_models = 100*mean_squared_error(self.data.X_std@(lin_coef_.reshape(-1)), self.data.X_std@(reg.coef_.reshape(-1)), squared=False)/(np.max(self.data.y_)-np.min(self.data.y_))
+            # nrmse_models = 100*mean_squared_error(self.data.X_std@(lin_coef_.reshape(-1)), self.data.X_std@(reg.coef_.reshape(-1)), squared=False)/(np.max(self.data.y_)-np.min(self.data.y_))
+            # \n NRMSE(PLS, Lin): {nrmse_models}"
+            if 'PLS' in model_name:
+                marker = 's'
+                color = '#ddcc77'
+            if 'RR' in model_name:
+                marker = 'o'
+                color = '#117733'
+            else:
+                marker = 's'
             axs[0].plot(
-                self.data.x, reg.coef_.reshape(-1), label=f"{model_names[j]}, NRMSE: {nrmse_reg:.2f} %\n NRMSE(PLS, Lin): {nrmse_models}", lw=2.5, 
-                color=self.color_list[np.mod(j+1, len(self.color_list))], 
-                marker=self.marker_list[np.mod(j+1, len(self.marker_list))], 
-                markevery=(5*(j+1), 30), markersize=9)
+                self.data.x, reg.coef_.reshape(-1), label=f"{model_names[j]}, NRMSE: {nrmse_reg:.2f}%", lw=2.5, 
+                color=color, 
+                marker=marker, markevery=(5*(j+1), 65), markersize=9)
         axs[0].set_ylabel(r'$\beta$')
         axs[0].set_xlabel(x_label)
         axs[0].set_xlim([2.0, 3.5])
         label = self.nullspace_dict[feat_key][model_name]['nulls_label']
         
-        # label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
-        # print(label)
-        #nulls_ = self.nullspace_dict[feat_key][model_name]['nulls']
-        #y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
-        #x = self.data.x
-        #axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+        #label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
+        #print(label)
+        nulls_ = self.nullspace_dict[feat_key][model_name]['nulls']
+        y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
+        x = self.data.x
+        axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
 
         #axs[0].fill_between(
         #    x, nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', 
         #    zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
-        axs[0].legend(loc='best')
+        axs[0].legend(loc='best', frameon=False)
 
         # Middle: Non-linearity check
         # How good is the linear approximation:
@@ -406,12 +409,12 @@ def plot_linearized_nonlinear_comp(feature_non_lin, feature_linearized, y_train,
     # f_mean_x = center_taylor
     # rel_deviation = np.abs((f_mean_x-mean_fx)/mean_fx)
 
-    textstr = '\n'.join((
-        'NRMSE: %.3f' % (nrmse),
+    #textstr = '\n'.join((
+    #    'NRMSE: %.3f' % (nrmse),
         # 'RMSE Central Region: %.2f' % (rmse_),
         # 'Dev at center: %.2f' % (100*rel_deviation) + '%',
-        ))
-    h2 = ax.plot([], [], ' ', label=textstr)
+    #    ))
+    #h2 = ax.plot([], [], ' ', label=textstr)
     
     # Fix overlapping axis ticks in case of small numbers
     if np.abs(feature_linearized.max()-feature_linearized.min()) < 0.01:
@@ -422,7 +425,8 @@ def plot_linearized_nonlinear_comp(feature_non_lin, feature_linearized, y_train,
 
     handles, labels = ax.get_legend_handles_labels()
     order = [1,0]
-    ax.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
+    #ax.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
+    ax.legend(loc='best', frameon=False)
     ax.grid()
 
     return
@@ -449,75 +453,9 @@ def plot_pearson_corr_coef_comp(feature_non_lin,  y_train, cmap,
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
     
-    
     # handles, labels = ax.get_legend_handles_labels()
     # order = [1,0]
-    ax.legend()
+    ax.legend(loc='best', frameon=False)
     ax.grid()
 
     return
-
-
-def regression_coef_trajectory( 
-    alpha: float, nb_comp: int, rr: bool, pls: bool, x: np.ndarray, X: np.ndarray,
-    std: bool, y_selection: str, cv_pls=True, cv_rr=True, mind_pls=False, mind_rr=False):
-    """Explorative plot. Comparison of the linearized feature coefficients and learned coefficients.
-    If you want to plot the cv coeff and mind_dist_coeff, you need to pass these explicitly.
-    This function can be called via ipywidgets interact function.
-
-    Args:
-        alpha (float): Regularization parameter
-    """
-
-    X = (X - np.mean(X, axis=0))
-    if std:
-        X = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
-        # y = (y - np.mean(y, axis=0)) / np.std(y, axis=0)
-
-    if y_selection == 'Polynomial':
-        x_hat, lin_coef_, lin_const_coef = lfp_poly.regress_linearized_coeff(lfp_poly.feat_fun_dict['Polynomial Combination'], std=std)
-        y = copy.deepcopy(lfp_poly.data.y_)
-    elif y_selection == 'Sinus':
-        x_hat, lin_coef_, lin_const_coef = lfp_sin.regress_linearized_coeff(lfp_sin.feat_fun_dict['Sinus Transformation'], std=std)
-        y = copy.deepcopy(lfp_sin.data.y_)
-    elif y_selection == 'Sum of Squares':
-        x_hat, lin_coef_, lin_const_coef = lfp_sums.regress_linearized_coeff(lfp_sums.feat_fun_dict['Sum of Squares'], std=std)
-        y = copy.deepcopy(lfp_sums.data.y_)
-
-    # Create a figure with two subplots left coefficeints, right scatter plot of predictions
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18,6))
-    ax1.plot(x, lin_coef_, color=colors_IBM[0], label='Linearized Coefficients')
-    if rr:
-        ridge = Ridge(alpha=alpha)
-        ridge.fit(X, y)
-        ax1.plot(x, ridge.coef_, color=colors_IBM[2], label='Ridge Regression Coefficients')
-    if pls:
-        pls = PLSRegression(n_components=nb_comp, tol=1e-7, scale=False)
-        pls.fit(X, y)
-        ax1.plot(x, pls.coef_, color=colors_IBM[4], label='PLS Regression Coefficients')
-
-    if rr:
-        y_hat_rr = ridge.predict(X)
-        # Calculate rmse for ridge regression with the sklearn function
-        rmse_rr = np.sqrt(mse(y, y_hat_rr))
-        ax2.scatter(y, y_hat_rr, color=colors_IBM[2], label=f'Ridge Regression, RMSE = {rmse_rr:.3f}')
-    if pls:
-        y_hat_pls = pls.predict(X)
-        # Calculate rmse for PLS
-        rmse_pls = np.sqrt(mse(y, y_hat_pls))
-        ax2.scatter(y, y_hat_pls, color=colors_IBM[4], label=f'PLS Regression, RMSE = {rmse_pls:.3f}')
-
-    ax1.set_xlabel(labels_lfp['xdata_label'])
-    ax1.set_ylabel(labels_lfp['ydata_label'])
-    ax1.set_title('Ridge Regression Coefficients')
-    ax1.legend()
-    
-    ax2.set_xlabel(labels_lfp['ydata_label']+ 'True')
-    ax2.set_ylabel(labels_lfp['ydata_label']+ ' Predicted')
-    ax2.set_title('Predictions')
-    ax2.legend()
-
-    if show_plot:
-        plt.show()
-    else: 
-        return fig, (ax1, ax2)

@@ -441,7 +441,7 @@ def optimize_cv(
         featlin=featlin, **kwargs)
 
     # If kwarg plot is TRUE, plot the results
-    if kwargs.get('plot', True):
+    if kwargs.get('plot', False):
         key = 'components' if algorithm=='PLS' else 'alphas'
         plot_cv_results(res_dict, key=key)
     return res_dict
@@ -485,47 +485,35 @@ def plot_cv_results(res_dict, key='components'):
     plt.tight_layout()
     plt.show()
 
-def optimize_regcoef_nrmse(model, X, y, regularization_limits, lin_coef_, max_depth=10): 
-    '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
-    As of now, only PLS regression or ridge regression are implemented. 
-    This algorithm starts with the highest regularization and goes down stepwise. In case of PLS in steps of componets, 
-    in the case of ridge regression in 10 gemetrically spaced values between the regularization limits.
-    '''
-    if model=='PLS': 
-        # Start with highest regularization and decrease by step of 1.
-        if type(regularization_limits[0]) != int:
-            raise TypeError('If PLS is the model, the upper regularization error must be integer!')
-        pred_error = np.zeros(regularization_limits[0])
-        for i in range(regularization_limits[0]):
-            model = PLSRegression(n_components=i+1, tol=1e-7, scale=False)
-            model.fit(X-np.mean(X, axis=0), y-y.mean())
-            pred_error[i] = mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)
-        reg = np.where(pred_error==np.min(pred_error))[0][0]+1
-        print(reg)
-    elif model=='ridge':
-        alphas = np.geomspace(regularization_limits[0], regularization_limits[1], num=11)
-        pred_error = np.zeros(len(alphas))
-        for i in range(max_depth):
-            for i, alpha in enumerate(alphas):
-                model = Ridge(alpha=alpha)
-                model.fit(X-np.mean(X, axis=0), y-y.mean())
-                # Constant factor deleted. MSE Sufficient here.
-                pred_error[i] = mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)
-            pre1, pre2 = np.partition(pred_error, 2)[0:2]
-            id1 = np.where(pred_error==pre1)[0][0]
-            id2 = np.where(pred_error==pre2)[0][0]
-            alphas = np.geomspace(alphas[id1], alphas[id2], num=11)
-        id_min = np.where(pred_error==np.min([pre1, pre2]))
-        reg = alphas[id_min][0]
-        model = Ridge(alpha=reg)
-        model.fit(X-np.mean(X, axis=0), y-y.mean())
-        # Constant factore deleted. MSE Sufficient here.
-        pred_error_min = 100*mean_squared_error(X@lin_coef_.reshape(-1), X@(model.coef_.reshape(-1)), squared=False)/(np.max(y)-np.min(y))
-        print(f' Alpha: {reg:.4f}, corresponding to {pred_error_min:.4f}')
-    else:
-        raise ValueError('Not Implemented')
-    return reg
+def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+    """Truncates a colormap. This is important because a) many people are partly colorblind and a lot of 
+    colormaps unsuited for them, and b) a lot of colormaps include yellow whichcanbe hard to see on some 
+    screens and bad quality prints. 
+    from https://stackoverflow.com/questions/18926031/how-to-extract-a-subset-of-a-colormap-as-a-new-colormap-in-matplotlib
+    
+    Parameters
+    ----------
+    camp : object
+        matplotlib colormap object
+    minval : float, default 0.0
+        lower cutoff of colorbar as a fraction in range 0, 1
+    maxval : float, default 1.0
+        higher cutoff of colorbar as a fraction in range 0, 1
+    n : int, default 100
+        number linearly spaced colors that shall be placed in the colorbar
 
+    Returns
+    -------
+    new_cmap : object
+        new matplotlib colorbar
+    """
+    new_cmap = mcolors.LinearSegmentedColormap.from_list(
+        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
+
+# Legacy
+# Not used anymore
 def optimize_regcoef_dist(model, X, y, regularization_limits, lin_coef_, norm=1, max_depth=5): 
     '''Find learned regression coefficients that lead to prediciotns as close as possible to the desired NRMSE error.
     As of now, only PLS regression or ridge regression are implemented. 
@@ -574,31 +562,3 @@ def optimize_regcoef_dist(model, X, y, regularization_limits, lin_coef_, norm=1,
     else: 
         raise ValueError('Not Implemented')
     return reg
-
-
-def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
-    """Truncates a colormap. This is important because a) many people are partly colorblind and a lot of 
-    colormaps unsuited for them, and b) a lot of colormaps include yellow whichcanbe hard to see on some 
-    screens and bad quality prints. 
-    from https://stackoverflow.com/questions/18926031/how-to-extract-a-subset-of-a-colormap-as-a-new-colormap-in-matplotlib
-    
-    Parameters
-    ----------
-    camp : object
-        matplotlib colormap object
-    minval : float, default 0.0
-        lower cutoff of colorbar as a fraction in range 0, 1
-    maxval : float, default 1.0
-        higher cutoff of colorbar as a fraction in range 0, 1
-    n : int, default 100
-        number linearly spaced colors that shall be placed in the colorbar
-
-    Returns
-    -------
-    new_cmap : object
-        new matplotlib colorbar
-    """
-    new_cmap = mcolors.LinearSegmentedColormap.from_list(
-        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
-        cmap(np.linspace(minval, maxval, n)))
-    return new_cmap
