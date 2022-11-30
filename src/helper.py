@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd 
-import time
 import seaborn as sns
 
 import matplotlib.pyplot as plt
@@ -8,9 +7,7 @@ import matplotlib.colors as mcolors
 
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.linear_model import Ridge
-
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import KFold
 from sklearn.model_selection import GridSearchCV
@@ -76,10 +73,11 @@ def construct_data(x_min, x_max, basis_function,
 
     return obj
 
-def construct_plot_data_interactive(x_min, x_max, basis_function,  
-                        mean_param0, mean_param1, mean_param2, 
-                        stdv_params0, stdv_params1, stdv_params2, 
-                        num_datapoints=50, draws=10):
+def construct_plot_data_interactive(
+        x_min, x_max, basis_function,  
+        mean_param0, mean_param1, mean_param2, 
+        stdv_params0, stdv_params1, stdv_params2, 
+        num_datapoints=50, draws=10):
     """Wraper around 'construct_plot_data' to interact with ipython widget
     """
     mean_params = np.array([mean_param0, mean_param1, mean_param2])     
@@ -263,8 +261,14 @@ def optimize_pls(X, y, max_comps=20, folds=10, nb_stds=1, min_distance_search=Fa
     return {'cv_res': cv_res_dict, 'algorithm': 'PLS'}
 
 
-def optimize_rr(X, y, alpha_lim=[10e-5, 10e3], folds=5, nb_stds=1, plot=False, min_distance_search=True, std=False, featlin=[]):
+def optimize_rr(X, y, alpha_lim: list=None, folds=5, nb_stds=1, plot=False, min_distance_search=True, std=False, featlin: list=None):
     """Crossvalidation of RR algorithm and plotting of results"""
+
+    if alpha_lim is None:
+        alpha_lim = [10e-5, 10e3]
+    if featlin is None:
+        featlin = []
+
     nb_iterations = 15
     nb_selected_values = 8
     rmse = []
@@ -397,7 +401,7 @@ def optimize_rr(X, y, alpha_lim=[10e-5, 10e3], folds=5, nb_stds=1, plot=False, m
     return {'cv_res': cv_res_dict, 'algorithm': 'RR'}
 
 def optimize_cv(
-        X, y, max_comps=20, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, 
+        X, y, max_comps=20, alpha_lim: list=None, folds=10, nb_stds=1, 
         plot_components=False, std=False, min_distance_search=False, 
         featlin=0, algorithm='PLS', **kwargs):
     """Crossvalidation or optimization of regression coefficient distance for PLS or RR
@@ -426,7 +430,9 @@ def optimize_cv(
     components : ndarray 
         list of components tested for cv
     """
-    
+    if alpha_lim is None:
+        alpha_lim = [10e-5, 10e3]
+
     if std: 
         X = StandardScaler().fit_transform(X)
 

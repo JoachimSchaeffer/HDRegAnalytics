@@ -98,7 +98,7 @@ class BasicsData():
         self = self.standardscaler(scale_y=False, scale_x=True)
         return self
     
-    def construct_y_data(self, targetfun, per_range=[0,1]):
+    def construct_y_data(self, targetfun, per_range: list=None):
         """Construct responsese
     
         Parameters
@@ -116,6 +116,8 @@ class BasicsData():
         y : ndarray
             1D array of target/response values
         """
+        if per_range is None:
+            per_range = [0, 1]
 
         columns = self.X.shape[1]
         low_ind = int(per_range[0]*columns)
@@ -213,8 +215,12 @@ class BasicsData():
         
 
 # Differen basis for functions.e
-def polynomial(x, num_basis=4, data_limits=[-1., 1.]):
+def polynomial(x, num_basis=4, data_limits: list=None):
     """Polynomial basis"""
+    
+    if data_limits is None:
+        data_limits = [-1., 1.]
+
     centre = data_limits[0]/2. + data_limits[1]/2.
     span = data_limits[1] - data_limits[0]
     z = np.asarray(x, dtype=float) - centre
@@ -224,8 +230,12 @@ def polynomial(x, num_basis=4, data_limits=[-1., 1.]):
         Phi[:, i:i+1] = z**i
     return Phi
 
-def radial(x, num_basis=4, data_limits=[-1., 1.], width=None):
+def radial(x, num_basis=4, data_limits: list=None, width=None):
     """Radial basis constructed using exponentiated quadratic form."""
+    
+    if data_limits is None:
+        data_limits = [-1., 1.]
+
     if num_basis>1:
         centres=np.linspace(data_limits[0], data_limits[1], num_basis)
         if width is None:
@@ -240,8 +250,12 @@ def radial(x, num_basis=4, data_limits=[-1., 1.], width=None):
         Phi[:, i:i+1] = np.exp(-0.5*((np.asarray(x, dtype=float)-centres[i])/width)**2)
     return Phi
 
-def fourier(x, num_basis=4, data_limits=[-1., 1.]):
+def fourier(x, num_basis=4, data_limits: list=None):
     """Fourier basis"""
+
+    if data_limits is None:
+        data_limits = [-1., 1.]
+
     tau = 2*np.pi
     span = float(data_limits[1]-data_limits[0])
     Phi = np.ones((x.shape[0], num_basis))
@@ -252,8 +266,12 @@ def fourier(x, num_basis=4, data_limits=[-1., 1.]):
             Phi[:, i:i+1] = np.cos((i+1)*tau*np.asarray(x, dtype=float))
     return Phi
 
-def relu(x, num_basis=4, data_limits=[-1., 1.], gain=None):
+def relu(x, num_basis=4, data_limits: list=None, gain=None):
     """Rectified linear units basis"""
+
+    if data_limits is None:
+        data_limits = [-1., 1.]
+
     if num_basis>2:
         centres=np.linspace(data_limits[0], data_limits[1], num_basis)[:-1]
     elif num_basis==2:
@@ -273,8 +291,12 @@ def relu(x, num_basis=4, data_limits=[-1., 1.], gain=None):
         Phi[:, i:i+1] = gain[i-1]*(np.asarray(x, dtype=float)>centres[i-1])*(np.asarray(x, dtype=float)-centres[i-1])
     return Phi
 
-def hyperbolic_tangent(x, num_basis=4, data_limits=[-1., 1.], gain=None):
+def hyperbolic_tangent(x, num_basis=4, data_limits: list=None, gain=None):
     """Hyperbolic tangents"""
+
+    if data_limits is None:
+        data_limits = [-1., 1.]
+
     if num_basis>2:
         centres=np.linspace(data_limits[0], data_limits[1], num_basis-1)
         width = (centres[1]-centres[0])/2.

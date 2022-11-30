@@ -5,28 +5,24 @@ Subsequently finding a constant term via regeression to match the metdoch
 """
 
 # Packages
-from audioop import mul
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib import cm
 import matplotlib.colors as clr
 
 from sklearn.linear_model import LinearRegression
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
-from sklearn.metrics import mean_absolute_percentage_error
 
 import copy
 
 from src.basis import BasicsData
 from src.nullspace import Nullspace
+from src.nullspace import format_label
 
 from src.helper import optimize_cv
-from src.helper import optimize_regcoef_dist
 
 import jax.numpy as jnp
 from jax import jacfwd
@@ -131,12 +127,21 @@ class Featlin():
 
         return x_hat, lin_coef, np.array(linearized_const_coef)
     
-    def analyse_all_features(
+    def analyze_all_features(
         self, 
-        opt_cv={'active':True, 'max_comp':10}, 
-        opt_dist={'active':False}, max_nrmse=1, 
-        fig_props={'save':False, 'multiple_fig': True}, std=False):
-        """Analyses all Features"""
+        opt_cv: dict=None, 
+        opt_dist: dict=None, 
+        fig_props: dict=None, 
+        max_nrmse=1, std=False
+        ):
+        """analyzes all Features"""
+
+        if opt_cv is None:
+            opt_cv = {'active':True, 'max_comp':10}
+        if opt_dist is None:
+            opt_dist = {'active':False}
+        if fig_props is None:
+            fig_props = {'save':False, 'multiple_fig': True}
 
         if not fig_props['multiple_fig']: 
             fig = plt.figure(constrained_layout=True, figsize=(36,7*len(self.nullspace_dict.keys())))
@@ -145,7 +150,7 @@ class Featlin():
             #    )
 
         for i, key in enumerate(self.nullspace_dict.keys()): 
-            self.analyse_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0)
+            self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0)
             if fig_props['multiple_fig']:
                 fig, ax = self.linearization_plot(key)
                 if fig_props['save']: 
@@ -164,20 +169,26 @@ class Featlin():
         
         return self
 
-    def analyse_feature(self, feat_key, std=False,
-        opt_cv={'active':True, 'model': []}, opt_dist={'active':True, 'model': ['PLS', 'RR']},
-        plot_cv=0, max_nrmse=1):
-        ''' Function to anlayse features given certain data! (: '''
+    def analyze_feature(
+        self, feat_key, std=False, plot_cv=0, max_nrmse=1,
+        opt_cv: dict=None, opt_dist: dict=None,
+        spec_models: dict=None):
+        ''' Function to anlayse features given certain data! (: 
+        The internet says (https://docs.python-guide.org/writing/gotchas/): 
+        Python's default arguments are evaluated once when the function is defined, not each time the function is called (like it is in say, Ruby).
+        '''
 
-        # PLS 1 model is always selected as a reference. 
-        # Models
-        models = [
-            PLSRegression(n_components=2, tol=1e-7, scale=False)
-        ]
-        model_names = [
-            'PLS 2 comp'
-        ]
         # List of results, should be in the same order as the pandas dataframe.
+        if opt_cv is None:
+            opt_cv = {'active':False, 'model': []}
+        if opt_dist is None:
+            opt_dist = {'active':False, 'model': []}
+        if spec_models is None:
+            spec_models = {'models': [], 'model_names': []}
+
+        models = spec_models['models']
+        model_names = spec_models['model_names']
+        
         results = []
         results.append(feat_key)
         if std:
@@ -238,15 +249,13 @@ class Featlin():
         self.nullspace_dict[feat_key]['lfun']['x_hat'] = x_hat
         print(model_names)
 
-        # Analyze the nullspace of the feature function
-        # BROKEN ATM! for some reason the models are not added...
         for i, model in enumerate(models):
             results.append(model_names[i])
             reg = model.fit(X, y)
             nrmse_reg = 100*mean_squared_error(y, X@(reg.coef_.reshape(-1)), squared=False)/(np.max(y)-np.min(y))
             
             self.nullspace_dict[feat_key][model_names[i]] = dict.fromkeys(['model', 'nrmse', 'nulls_label', 'nulls'])
-            # Not nice, but it is reliable.
+
             self.nullspace_dict[feat_key][model_names[i]]['model'] = copy.deepcopy(reg)
             self.nullspace_dict[feat_key][model_names[i]]['nrmse'] = nrmse_reg
 
@@ -262,31 +271,22 @@ class Featlin():
                 plot_results=False, save_plot=0, max_nrmse=max_nrmse)
 
             self.nullspace_dict[feat_key][model_names[i]]['nulls'] = nulls_
-            from src.nullspace import format_label
             label = format_label(nulls_.max_gamma, nulls_.max_nrmse)
             self.nullspace_dict[feat_key][model_names[i]]['nulls_label'] = label
-        
-
-        # Call function to transfer information in a result table.
-        # self.label_dict = {'xlabel': 'Voltage (V)'}
-        # print(self.model_dict['model_names'])
 
         return self
 
-    def linearization_plot(self, feat_key, fig=None, axs=None):
-        """Calls the linearization plotting function, resulting in a row of three plots for one feature"""
-        if axs is None:
-            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(24,5.3))
-        axs = self.linearization_regeression_row_plots(feat_key, axs)
-        # plt.show()
-        return fig, axs
-
-    def linearization_regeression_row_plots(self, feat_key, axs, label_dict={'xlabel' :'Voltage (V)'}): 
+    def linearization_plot(self, feat_key, axs=None, fig=None, label_dict: dict=None): 
         """Plot a row of 3 subplots. 
         1: Regression coefficients 
         2: Linearization Analysis
         3: Pearson correlation coefficient
         """
+        if label_dict is None:
+            label_dict={'xlabel' :'Voltage (V)'}
+
+        if axs is None:
+            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(24,5.3))
         x_label = label_dict['xlabel']
         lin_coef_ = self.nullspace_dict[feat_key]['lfun']['lin_coef']
 
@@ -357,7 +357,7 @@ class Featlin():
         plot_pearson_corr_coef_comp(
             feat_nonlin,  self.data.y_, self.cmap, title='Person Correlation', xlabel='Feature', ylabel='y', ax=axs[2])
 
-        return axs
+        return fig, axs
 
 
 def jax_moment(X, power): 
@@ -427,7 +427,7 @@ def plot_linearized_nonlinear_comp(feature_non_lin, feature_linearized, y_train,
     order = [1,0]
     #ax.legend([handles[idx] for idx in order],[labels[idx] for idx in order])
     ax.legend(loc='best', frameon=False)
-    ax.grid()
+    # ax.grid()
 
     return
 
@@ -456,6 +456,6 @@ def plot_pearson_corr_coef_comp(feature_non_lin,  y_train, cmap,
     # handles, labels = ax.get_legend_handles_labels()
     # order = [1,0]
     ax.legend(loc='best', frameon=False)
-    ax.grid()
+    # ax.grid()
 
     return
