@@ -132,7 +132,8 @@ class Featlin():
         opt_cv: dict=None, 
         opt_dist: dict=None, 
         fig_props: dict=None, 
-        max_nrmse=1, std=False
+        max_nrmse=1, std=False,
+        verbose=False
         ):
         """analyzes all Features"""
 
@@ -144,27 +145,27 @@ class Featlin():
             fig_props = {'save':False, 'multiple_fig': True}
 
         if not fig_props['multiple_fig']: 
-            fig = plt.figure(constrained_layout=True, figsize=(36,7*len(self.nullspace_dict.keys())))
+            fig = plt.figure(constrained_layout=True, figsize=(20,4.72*len(self.nullspace_dict.keys())))
             subfigs = fig.subfigures(nrows=len(self.nullspace_dict.keys()), ncols=1)
-            #fig, axs = plt.subplots(len(self.nullspace_dict.keys()), 3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]}, figsize=(36,7*len(self.nullspace_dict.keys()))
-            #    )
 
         for i, key in enumerate(self.nullspace_dict.keys()): 
-            self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0)
+            self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0, verbose=verbose)
             if fig_props['multiple_fig']:
                 fig, ax = self.linearization_plot(key)
+                # Set title of the figure
+                fig.suptitle(f'Linearized {key} Feature',  y=0.94)
                 if fig_props['save']: 
-                    fig.suptitle(f'Linearized {key} Feature {fig_props["response"]}', y=0.94)
                     ax[0].set_xlabel(fig_props['ax0_xlabel'])
                     plt.tight_layout()
                     fig.savefig(fig_props['save_path'] + key + fig_props["response"] + '.pdf')
             else: 
-                subfigs[i].suptitle(f'Linearized {key} Feature {fig_props["response"]}')
-                axs = subfigs[i].subplots(nrows=1, ncols=3, gridspec_kw={'width_ratios': [8, 2.5, 2.5]})
+                subfigs[i].suptitle(f'Linearized {key} Feature') 
+                axs = subfigs[i].subplots(nrows=1, ncols=3, gridspec_kw={'width_ratios': [6, 2.5, 2.5]})
                 fig, axs = self.linearization_plot(key, axs=axs, fig=fig)
-        if not fig_props['multiple_fig']: 
+        # This will be written in the manuscript figure caption
+        # fig.suptitle(f'Linearized Features {fig_props["response"]}')
+        if not fig_props['multiple_fig'] and fig_props['save']:
             axs[0].set_xlabel(fig_props['ax0_xlabel'])
-            # plt.tight_layout()
             fig.savefig(fig_props['save_path'] + 'LinerizationSummary' + fig_props["response"] + '.pdf')
         
         return self
@@ -172,7 +173,7 @@ class Featlin():
     def analyze_feature(
         self, feat_key, std=False, plot_cv=0, max_nrmse=1,
         opt_cv: dict=None, opt_dist: dict=None,
-        spec_models: dict=None):
+        spec_models: dict=None, verbose=False):
         ''' Function to anlayse features given certain data! (: 
         The internet says (https://docs.python-guide.org/writing/gotchas/): 
         Python's default arguments are evaluated once when the function is defined, not each time the function is called (like it is in say, Ruby).
@@ -204,10 +205,10 @@ class Featlin():
         # These if statements could be improved, for speed, but it works for now
         cv_dict_pls = optimize_cv(
             X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='PLS',
-            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_)
+            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
         cv_dict_rr = optimize_cv(
             X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='RR',
-            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_)
+            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
 
         if 'PLS' in opt_cv['model']:
             rmse_min_comp = cv_dict_pls['cv_res']['rmse_min_param']
@@ -247,7 +248,8 @@ class Featlin():
         self.nullspace_dict[feat_key]['lfun']['lin_coef'] = lin_coef_
         self.nullspace_dict[feat_key]['lfun']['nrmse'] = nrmse_linfeat
         self.nullspace_dict[feat_key]['lfun']['x_hat'] = x_hat
-        print(model_names)
+        if verbose:
+            print(model_names)
 
         for i, model in enumerate(models):
             results.append(model_names[i])
@@ -268,7 +270,7 @@ class Featlin():
             nulls_ = nulls_.nullspace_correction(
                 key_alpha=model_names[i], w_alpha_name=model_names[i], 
                 w_beta = lin_coef_.reshape(-1), w_beta_name='', std=std, 
-                plot_results=False, save_plot=0, max_nrmse=max_nrmse)
+                plot_results=False, save_plot=0, max_nrmse=max_nrmse, verbose=verbose)
 
             self.nullspace_dict[feat_key][model_names[i]]['nulls'] = nulls_
             label = format_label(nulls_.max_gamma, nulls_.max_nrmse)
@@ -286,7 +288,7 @@ class Featlin():
             label_dict={'xlabel' :'Voltage (V)'}
 
         if axs is None:
-            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(24,5.3))
+            fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(20,4.72))
         x_label = label_dict['xlabel']
         lin_coef_ = self.nullspace_dict[feat_key]['lfun']['lin_coef']
 

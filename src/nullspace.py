@@ -51,7 +51,7 @@ class Nullspace():
     
     def nullspace_correction(
         self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, max_nrmse=-0.5,
-        plot_results=False, save_plot=False, path_save='', file_name='', **kwargs):
+        plot_results=False, save_plot=False, path_save='', file_name='', verbose=True, **kwargs):
         """Function that calls 'nullspace_calc allowing to shorten syntax.
 
         Parameters
@@ -185,8 +185,8 @@ class Nullspace():
                         gammas=np.geomspace(gammas[j-1], gammas[j], nb_gammas)
                 self.max_gamma = gamma
                 self.max_nrmse = cons
-                
-                print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
+                if verbose: 
+                    print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
                 
                 # con = {'type': 'eq', 'fun': constraint}
                 # solution = minimize(objective_gamma, 5000, method='SLSQP',\

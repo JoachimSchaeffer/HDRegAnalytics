@@ -153,7 +153,7 @@ def plot_corrheatmap(ax, x, X, cmap, label, title, cols=True):
     # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
     return ax
 
-def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, std=False):
+def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, verbose=True, std=False):
     """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.
 
     Parameters
@@ -184,11 +184,11 @@ def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, std=False):
     max_exp = np.floor(np.log10(int((10**2)*y_range)))
     gs  = np.logspace(min_exp, max_exp, 30)
     gs = np.append(gs, [int((10**2)*y_range)])
-    return src.nullspace.nullspace_correction(w_alpha, w_beta, X, x, gs=gs, comp_block=0)
+    return src.nullspace.nullspace_correction(w_alpha, w_beta, X, x, gs=gs, comp_block=0, verbose=verbose)
 
 
 def optimize_pls(X, y, max_comps=20, folds=10, nb_stds=1, min_distance_search=False, 
-        featlin=0, **kwargs):
+        featlin=0, verbose=False, **kwargs):
     """Optimize the number of components for PLS regression."""
 
     components = np.arange(1, max_comps + 1).astype('uint8')
@@ -261,7 +261,10 @@ def optimize_pls(X, y, max_comps=20, folds=10, nb_stds=1, min_distance_search=Fa
     return {'cv_res': cv_res_dict, 'algorithm': 'PLS'}
 
 
-def optimize_rr(X, y, alpha_lim: list=None, folds=5, nb_stds=1, plot=False, min_distance_search=True, std=False, featlin: list=None):
+def optimize_rr(
+        X, y, alpha_lim: list=None, folds=5, nb_stds=1, 
+        plot=False, min_distance_search=True, std=False, 
+        featlin: list=None, verbose=False):
     """Crossvalidation of RR algorithm and plotting of results"""
 
     if alpha_lim is None:
@@ -307,11 +310,13 @@ def optimize_rr(X, y, alpha_lim: list=None, folds=5, nb_stds=1, plot=False, min_
         alpha_lim_cv.sort()
 
         # If the two alpha values are close enough, stop the search
-        print(f'Iteration: {i} done')
+        if verbose:
+            print(f'Iteration: {i} done')
 
         # Break if the relative difference between the two rmse values associated with the two alpha values is small enough
         if np.abs(rmse[i][idx[0]]-rmse[i][idx[1]])/np.max([rmse[i][idx[0]], rmse[i][idx[1]]]) < 0.001:
-            print(f'Converged after {i} iterations')
+            if verbose: 
+                print(f'Converged after {i} iterations, breaking')
             break
     alphas_cv = np.concatenate(alphas, axis=0)
     rmse_cv = np.concatenate(rmse, axis=0)
@@ -403,7 +408,7 @@ def optimize_rr(X, y, alpha_lim: list=None, folds=5, nb_stds=1, plot=False, min_
 def optimize_cv(
         X, y, max_comps=20, alpha_lim: list=None, folds=10, nb_stds=1, 
         plot_components=False, std=False, min_distance_search=False, 
-        featlin=0, algorithm='PLS', **kwargs):
+        featlin=0, algorithm='PLS', verbose=False, **kwargs):
     """Crossvalidation or optimization of regression coefficient distance for PLS or RR
     
     Parameters
@@ -439,12 +444,12 @@ def optimize_cv(
     if algorithm=='PLS':
         res_dict = optimize_pls(X, y, max_comps=max_comps, folds=folds, nb_stds=nb_stds, 
         plot_components=plot_components, std=std, min_distance_search=min_distance_search, 
-        featlin=featlin, **kwargs)
+        featlin=featlin, verbose=verbose, **kwargs)
  
     elif algorithm=='RR':
         res_dict = optimize_rr(X, y, alpha_lim=alpha_lim, folds=folds, nb_stds=nb_stds, 
         std=std, min_distance_search=min_distance_search, 
-        featlin=featlin, **kwargs)
+        featlin=featlin, verbose=verbose, **kwargs)
 
     # If kwarg plot is TRUE, plot the results
     if kwargs.get('plot', False):
