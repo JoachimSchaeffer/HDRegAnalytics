@@ -91,11 +91,12 @@ class Featlin():
 
     def regress_linearized_coeff(self, fun, std=False):
         """Estimation of m and b via OLS regression.
+        std : bool
+            The way this is implemented is that the facotr will only be applied after the estimation
+            of the linearized coefficients. This is done because we want to comopare the coefficeints correponding to the 
+            standardized data. But this means, X must be provided prior to standardization!
         """
-        #if std: 
-        #    X = self.data.X_std
-        #else: 
-        #    X = self.data.X
+
         X = self.data.X
         y = self.data.y
 
@@ -120,10 +121,10 @@ class Featlin():
               with a tolerance of 1% of the mean of y. Linearized constant coefficient: \
               {linearized_const_coef}, mean of y: {np.mean(y)}"
         
+        lin_coef = np.array(linearized_coef)
+
         if std:
-            lin_coef = np.array(linearized_coef)*np.std(X, axis=0)
-        else:
-            lin_coef = np.array(linearized_coef)
+            lin_coef = lin_coef * self.data.stdx
 
         return x_hat, lin_coef, np.array(linearized_const_coef)
     
@@ -149,9 +150,9 @@ class Featlin():
             subfigs = fig.subfigures(nrows=len(self.nullspace_dict.keys()), ncols=1)
 
         for i, key in enumerate(self.nullspace_dict.keys()): 
-            self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=0, verbose=verbose)
+            self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=std, verbose=verbose)
             if fig_props['multiple_fig']:
-                fig, ax = self.linearization_plot(key)
+                fig, ax = self.linearization_plot(key, std=std)
                 # Set title of the figure
                 fig.suptitle(f'Linearized {key} Feature',  y=0.94)
                 if fig_props['save']: 
@@ -161,12 +162,12 @@ class Featlin():
             else: 
                 subfigs[i].suptitle(f'Linearized {key} Feature') 
                 axs = subfigs[i].subplots(nrows=1, ncols=3, gridspec_kw={'width_ratios': [6, 2.5, 2.5]})
-                fig, axs = self.linearization_plot(key, axs=axs, fig=fig)
+                fig, axs = self.linearization_plot(key, axs=axs, fig=fig, std=std)
         # This will be written in the manuscript figure caption
         # fig.suptitle(f'Linearized Features {fig_props["response"]}')
         if not fig_props['multiple_fig'] and fig_props['save']:
             axs[0].set_xlabel(fig_props['ax0_xlabel'])
-            fig.savefig(fig_props['save_path'] + 'LinerizationSummary' + fig_props["response"] + '.pdf')
+            fig.savefig(fig_props['save_path'] + 'LinerizationSummary.pdf')
         
         return self
 
@@ -194,8 +195,10 @@ class Featlin():
         results.append(feat_key)
         if std:
             X = self.data.X_std
+            stdv = self.data.stdx
         else: 
             X = self.data.X_
+            stdv = None
         y = self.data.y_
 
         # Calculate the feature and linearized coef.
@@ -203,12 +206,14 @@ class Featlin():
         nrmse_linfeat = 100*mean_squared_error(y, X@(lin_coef_.reshape(-1)), squared=False)/(np.max(y)-np.min(y))
         
         # These if statements could be improved, for speed, but it works for now
-        cv_dict_pls = optimize_cv(
-            X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='PLS',
-            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
-        cv_dict_rr = optimize_cv(
-            X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=10, nb_stds=1, algorithm='RR',
-            plot_components=plot_cv, std=False, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
+        if 'PLS' in opt_cv['model'] or 'PLS' in opt_dist['model']:
+            cv_dict_pls = optimize_cv(
+                X, y, max_comps=10, alpha_lim=[10e-5, 10e3], folds=5, nb_stds=1, algorithm='PLS',
+                plot_components=plot_cv, std=std, stdv=stdv, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
+        if 'RR' in opt_cv['model'] or 'RR' in opt_dist['model']:
+            cv_dict_rr = optimize_cv(
+                X, y, max_comps=10, alpha_lim=[10e-5, 10e4], folds=5, nb_stds=1, algorithm='RR',
+                plot_components=plot_cv, std=std, stdv=stdv, min_distance_search=opt_dist['active'], featlin=lin_coef_, verbose=verbose)
 
         if 'PLS' in opt_cv['model']:
             rmse_min_comp = cv_dict_pls['cv_res']['rmse_min_param']
@@ -217,9 +222,6 @@ class Featlin():
 
         if 'PLS' in opt_dist['model']:
             comp = cv_dict_pls['l2_distance_res']['l2_min_param']
-            # Legacy: 
-            # comp = optimize_regcoef_dist('PLS', X, y, [10], lin_coef_, norm=opt_dist['norm'], max_depth=10)
-            # Ensures that this is the last list item by removing previous identical entries. 
             if f"PLS {comp} comp" in model_names:
                 id = model_names.index(f"PLS {comp} comp")
                 model_names.remove(f"PLS {comp} comp")
@@ -236,8 +238,6 @@ class Featlin():
 
         if 'RR' in opt_dist['model']:
             alpha = cv_dict_rr['l2_distance_res']['l2_min_param']
-            # Legacy:
-            # alpha = optimize_regcoef_dist('ridge', X, y, [10**5, 10**(-5)], lin_coef_, norm=opt_dist['norm'], max_depth=10)
             models.append(Ridge(alpha=alpha))
             model_names.append(f"RR: {alpha:.5f}")
     
@@ -262,14 +262,21 @@ class Featlin():
             self.nullspace_dict[feat_key][model_names[i]]['nrmse'] = nrmse_reg
 
             # Create Nullspace object
-            # Train the model with the regression coeficients that shall be testes
-            nulls_ = Nullspace(self.data)
+            # Nullspace object handles standardization itself and expect coefficeints corresponding to
+            # data that is NOT standardized. Logic could be improved here. 
             if std: 
-                nulls_.std = True
-            nulls_.learn_weights([model], [model_names[i]])
+                reg_coef_nullsp = reg.coef_.reshape(-1)/self.data.stdx
+                lin_coef_nullsp = lin_coef_.reshape(-1)/self.data.stdx
+            else:
+                reg_coef_nullsp = reg.coef_.reshape(-1)
+                lin_coef_nullsp = lin_coef_.reshape(-1)
+            # Setup the nullspace object with data that is NOT standardized
+            nulls_ = Nullspace(self.data)
+            # For the nullspace correction we apply std false in all cases, 
+            # becasue we work woth retransformed regression coefficeints.
             nulls_ = nulls_.nullspace_correction(
-                key_alpha=model_names[i], w_alpha_name=model_names[i], 
-                w_beta = lin_coef_.reshape(-1), w_beta_name='', std=std, 
+                w_alpha=reg_coef_nullsp, w_alpha_name=model_names[i], 
+                w_beta=lin_coef_nullsp, w_beta_name='', std=std, 
                 plot_results=False, save_plot=0, max_nrmse=max_nrmse, verbose=verbose)
 
             self.nullspace_dict[feat_key][model_names[i]]['nulls'] = nulls_
@@ -278,7 +285,7 @@ class Featlin():
 
         return self
 
-    def linearization_plot(self, feat_key, axs=None, fig=None, label_dict: dict=None): 
+    def linearization_plot(self, feat_key, axs=None, fig=None, std=False, label_dict: dict=None): 
         """Plot a row of 3 subplots. 
         1: Regression coefficients 
         2: Linearization Analysis
@@ -291,6 +298,8 @@ class Featlin():
             fig, axs = plt.subplots(1, 3, gridspec_kw={'width_ratios': [5.5, 2.5, 2.5]}, figsize=(20,4.72))
         x_label = label_dict['xlabel']
         lin_coef_ = self.nullspace_dict[feat_key]['lfun']['lin_coef']
+        #if std:
+        #    lin_coef_ = lin_coef_*self.data.stdx
 
         # Linearized coefficients
         nrmse_linfeat = self.nullspace_dict[feat_key]['lfun']['nrmse']
@@ -328,13 +337,14 @@ class Featlin():
         #label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
         #print(label)
         nulls_ = self.nullspace_dict[feat_key][model_name]['nulls']
-        y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
         x = self.data.x
-        axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+        if std:
+            y2 = nulls_.nullsp['w_alpha_std']+nulls_.nullsp['v_'][-1,:]
+            axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha_std'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
+        else:
+            y2 = nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1,:]
+            axs[0].fill_between(x.reshape(-1), nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', zorder=-1, alpha=0.8, label=label)
 
-        #axs[0].fill_between(
-        #    x, nulls_.nullsp['w_alpha'], y2=y2, color='darkgrey', 
-        #    zorder=-1, alpha=0.8, label=r'close to $\mathcal{\mathbf{N}}(X)$')
         axs[0].legend(loc='best', frameon=False)
 
         # Middle: Non-linearity check

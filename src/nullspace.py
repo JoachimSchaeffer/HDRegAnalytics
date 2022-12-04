@@ -6,6 +6,7 @@ import matplotlib.pylab as plt
 import matplotlib.colors as mcolors
 from matplotlib import cm   
 import matplotlib.cm as cmx
+from matplotlib import rc
 import src.helper
        
 class Nullspace():
@@ -51,7 +52,7 @@ class Nullspace():
     
     def nullspace_correction(
         self, w_alpha=None, w_alpha_name=None, w_beta=None, w_beta_name=None, std=False, max_nrmse=-0.5,
-        plot_results=False, save_plot=False, path_save='', file_name='', verbose=True, **kwargs):
+        plot_results=False, save_plot=False, path_save='', file_name='', **kwargs):
         """Function that calls 'nullspace_calc allowing to shorten syntax.
 
         Parameters
@@ -185,8 +186,8 @@ class Nullspace():
                         gammas=np.geomspace(gammas[j-1], gammas[j], nb_gammas)
                 self.max_gamma = gamma
                 self.max_nrmse = cons
-                if verbose: 
-                    print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
+                
+                print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
                 
                 # con = {'type': 'eq', 'fun': constraint}
                 # solution = minimize(objective_gamma, 5000, method='SLSQP',\
@@ -233,6 +234,8 @@ class Nullspace():
             mse_reg = mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)
             mse_nulls = mean_squared_error(y_, X@(self.nullsp[key_alpha]+v_.reshape(-1)), squared=False)
             val = np.abs(mse_reg-mse_nulls)
+        elif method=='NRMSE_trial':
+            val = 100*mean_squared_error(X@(self.nullsp[key_alpha]), X@(self.nullsp[key_alpha]+v_.reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
         elif method=='NRMSE':
             nrmse_reg = 100*mean_squared_error(y_, X@(self.nullsp[key_alpha]), squared=False)/(np.max(y_)-np.min(y_))
             nrmse_nulls = 100*mean_squared_error(y_, X@(self.nullsp[key_alpha]+v_.reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
@@ -240,7 +243,7 @@ class Nullspace():
         # print(f'Delta MSE of gamma: {val}')   
         return val
 
-    def nullspace_calc(self, key_alpha, key_beta, X, gs: np.array=None):
+    def nullspace_calc(self, key_alpha, key_beta, X, gs=[None]):
         """This functions performs a nulspace normalization of regression coefficents.
         The problem is set up such that the L2 norm differences between ther regression 
         coefficients is minimzed.
