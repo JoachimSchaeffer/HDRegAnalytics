@@ -152,16 +152,18 @@ class Featlin():
         for i, key in enumerate(self.nullspace_dict.keys()): 
             self.analyze_feature(key, opt_cv=opt_cv, opt_dist=opt_dist, plot_cv=0, max_nrmse=max_nrmse, std=std, verbose=verbose)
             if fig_props['multiple_fig']:
-                fig, ax = self.linearization_plot(key, std=std)
+                fig, axs = self.linearization_plot(key, std=std)
                 # Set title of the figure
-                fig.suptitle(f'Linearized {key} Feature',  y=0.94)
+                #fig.suptitle(f'Linearized {key} Feature',  y=0.94)
+                axs[0].set_title(f'Linearized {key} Feature')
                 if fig_props['save']: 
-                    ax[0].set_xlabel(fig_props['ax0_xlabel'])
+                    axs[0].set_xlabel(fig_props['ax0_xlabel'])
                     plt.tight_layout()
                     fig.savefig(fig_props['save_path'] + key + fig_props["response"] + '.pdf')
             else: 
-                subfigs[i].suptitle(f'Linearized {key} Feature') 
+                #subfigs[i].suptitle(f'Linearized {key} Feature') 
                 axs = subfigs[i].subplots(nrows=1, ncols=3, gridspec_kw={'width_ratios': [6, 2.5, 2.5]})
+                axs[0].set_title(f'Linearized {key} Feature')
                 fig, axs = self.linearization_plot(key, axs=axs, fig=fig, std=std)
         # This will be written in the manuscript figure caption
         # fig.suptitle(f'Linearized Features {fig_props["response"]}')

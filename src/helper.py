@@ -367,7 +367,7 @@ def optimize_rr(
                 ridge = Ridge(alpha=a)
                 ridge.fit(X, y)
                 # y_hat = ridge.predict(X)
-                diff_vec = featlin-ridge.coef_
+                diff_vec = featlin-ridge.coef_.reshape(-1)
                 dist_l2_= np.linalg.norm(diff_vec, ord=2)
                 #if min_dist_alpha is None:
                 #    min_dist_alpha = a

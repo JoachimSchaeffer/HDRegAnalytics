@@ -243,7 +243,7 @@ class Nullspace():
         # print(f'Delta MSE of gamma: {val}')   
         return val
 
-    def nullspace_calc(self, key_alpha, key_beta, X, gs=[None]):
+    def nullspace_calc(self, key_alpha, key_beta, X, gs: np.array=None):
         """This functions performs a nulspace normalization of regression coefficents.
         The problem is set up such that the L2 norm differences between ther regression 
         coefficients is minimzed.
