@@ -118,6 +118,68 @@ lfp_kurt = lfp_kurt.construct_y_data(fun_targetj[5]).add_wgn(add_noise_X=False, 
 # Log Cycle Life
 lfp_lcl = BasicsData(X=X_lfp_train, x=x_lfp, y=np.log(y_lfp_train_true))
 
+# Log Cycle Life
+fig_props = {'save':save_plots, 'ax0_xlabel':'Voltage (V)', 'save_path':save_path + 'LCL_RR_',
+            'multiple_fig':False}
+
+lfp_sums = Featlin(data_obj=lfp_sums, feat_funcs=feat_fun_dict)
+fl_lfp_lcl = Featlin(data_obj=lfp_lcl, feat_funcs=feat_fun_dict)
+
+lfp_sums = lfp_sums.analyze_feature('Sum of Squares', opt_cv={'active':False, 'model': []}, opt_dist={'active':True, 'model': ['RR']}, con_thres=1, opt_gamma_method='Xv')
+fig, ax = lfp_sums.linearization_plot('Sum of Squares')
+#fig.suptitle('Sinus Feature Nullspace Analysis, RR')
+plt.tight_layout()
+fig.savefig('figures/sos_nulls_rr.pdf', bbox_inches='tight')
+
+
+lfp_sums = lfp_sums.analyze_feature('Sum of Squares',
+    con_thres=0.2, opt_gamma_method='Xv',
+    opt_cv={'active':False, 'model': []}, 
+    opt_dist={'active':True, 'model': ['PLS']})
+
+fig, ax = lfp_sums.linearization_plot('Sum of Squares')
+plt.tight_layout()
+fig.savefig('figures/sos_nulls_pls.pdf', bbox_inches='tight')
+
+
+
+from sklearn.metrics import mean_squared_error
+for key in fl_lfp_lcl.nullspace_dict.keys():
+    print(key)
+    keys_model = [key for key in fl_lfp_lcl.nullspace_dict[key].keys()]
+    
+    # Drop 'lfun' entry from keys_model list
+    keys_model = [key for key in keys_model if key != 'lfun']
+
+    key_alpha = 'w_alpha'
+    key_beta = 'w_beta'
+    for key_model in keys_model:
+        nulls_ = fl_lfp_lcl.nullspace_dict[key][key_model]['nulls']; 
+        X = nulls_.data.X_
+
+        if 0: 
+            # calucleate NRMSE
+            from sklearn.metrics import mean_squared_error
+            y_ = nulls_.data.y_
+            print(100*mean_squared_error(y_, X@(nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1, :]), squared=False)/(np.max(y_)-np.min(y_)))
+            print(100*mean_squared_error(y_, X@(nulls_.nullsp['w_beta']), squared=False)/(np.max(y_)-np.min(y_)))
+            print(100*mean_squared_error(y_, X@(nulls_.nullsp['w_alpha']), squared=False)/(np.max(y_)-np.min(y_)))
+        
+        # constrain NRMSE
+        y_ = nulls_.data.y_
+
+        nrmse_reg = 100*mean_squared_error(y_, X@(nulls_.nullsp[key_alpha]), squared=False)/(np.max(y_)-np.min(y_))
+        nrmse_nulls = 100*mean_squared_error(y_, X@(nulls_.nullsp[key_alpha]+nulls_.nullsp['v_'][-1, :].reshape(-1)), squared=False)/(np.max(y_)-np.min(y_))
+        val = np.abs(nrmse_reg-nrmse_nulls)
+
+        print(f'Constraint NRMSE: {val}')
+
+        # Make predicrtions with 'w_beta'
+        pred_lin = X@(nulls_.nullsp['w_beta'])
+        pred_model = X@(nulls_.nullsp['w_alpha'])
+        print(100*mean_squared_error(X@(nulls_.nullsp['w_alpha']), X@(nulls_.nullsp['w_alpha']+nulls_.nullsp['v_'][-1, :]), squared=False)/(np.max(pred_model)-np.min(pred_model)))
+        print(100*np.sqrt(np.average((X@(nulls_.nullsp['v_'][-1, :]))**2))/(np.max(pred_model)-np.min(pred_model)))
+
 
 # 'Sum of Squares': Using RR and std 
 lfp_sums_gt = Featlin(data_obj=lfp_sums, feat_funcs=feat_fun_dict)
@@ -130,6 +192,7 @@ lfp_sums_gt = Featlin(data_obj=lfp_sums, feat_funcs=feat_fun_dict)
 
 fig_props = {'save':save_plots, 'ax0_xlabel':'Voltage (V)', 'save_path':save_path + 'sums_gt_RR_',
              'multiple_fig':False}
+
 
 
 # Run the tests

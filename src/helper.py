@@ -88,7 +88,7 @@ def construct_plot_data_interactive(
                         num_datapoints=num_datapoints, draws=draws, plot_results=1)
     return None  
 
-def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Train', zorder=1, **kwargs): 
+def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Training', zorder=1, **kwargs): 
     """Plot Data"""
     # Get linestyle kwarg if it exists
     if 'linestyle' in kwargs:
@@ -98,7 +98,7 @@ def plot_x_tt2(X, x, ax, color, labelx, labely, label_data='Train', zorder=1, **
     ax.plot(x, X[:, :].T, linestyle, label=label_data, lw=1, color=color, zorder=zorder)
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc=4)
+    ax.legend(by_label.values(), by_label.keys(), loc=3)
     #axs.set_title('Training Data')
     ax.set_xlabel(labelx)
     ax.set_ylabel(labely)
