@@ -136,7 +136,8 @@ class Featlin():
         fig_props: dict=None, 
         con_thres=0.01, opt_gamma_method='Xv',
         std=False,
-        verbose=False
+        verbose=False,
+        gray_line_params=None
         ):
         """analyzes all Features"""
         # Create a list of labels from a.1) to f.4)
@@ -168,7 +169,7 @@ class Featlin():
                 #subfigs[i].suptitle(f'Linearized {key} Feature') 
                 axs = subfigs[i].subplots(nrows=1, ncols=4, gridspec_kw={'width_ratios': [4.5, 2, 2, 2]})
                 axs[0].set_title(f'Linearized {key} Feature')
-                fig, axs = self.linearization_plot(key, axs=axs, fig=fig, std=std)
+                fig, axs = self.linearization_plot(key, axs=axs, fig=fig, std=std, gray_line_params=gray_line_params)
             # Make figure labels
             # Label the axes
 
@@ -390,20 +391,21 @@ class Featlin():
                 color='#AA4499', 
                 marker=marker, markevery=(5*(j+4), 65), markersize=5, zorder=-1)
 
-            # Calculate 10 differecn nullspace correction vectors
-            # Get the gamma values
-            gamma_vals = np.logspace(np.log10(gray_line_params[0]*nulls_.max_gamma), np.log10(gray_line_params[1]*nulls_.max_gamma), gray_line_params[2])
-            #gamma_vals = np.linspace(nulls_.max_gamma, 10*nulls_.max_gamma, 5)
+            if gray_line_params is not None:
+                # Calculate 10 differecn nullspace correction vectors
+                # Get the gamma values
+                gamma_vals = np.logspace(np.log10(gray_line_params[0]*nulls_.max_gamma), np.log10(gray_line_params[1]*nulls_.max_gamma), gray_line_params[2])
+                #gamma_vals = np.linspace(nulls_.max_gamma, 10*nulls_.max_gamma, 5)
 
-            v, v_, norm_, gamma = nulls_.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
+                v, v_, norm_, gamma = nulls_.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
 
-            for i in range(v_.shape[0]):
-                if i==0: 
-                    axs[0].plot(
-                        self.data.x, reg.coef_.reshape(-1)+v_[i,:], label=label.split()[0], lw=0.4, color='#2b2b2b', zorder=-1)
-                else:
-                    axs[0].plot(
-                        self.data.x, reg.coef_.reshape(-1)+v_[i,:], lw=0.4, color='#2b2b2b', zorder=-1)
+                for i in range(v_.shape[0]):
+                    if i==0: 
+                        axs[0].plot(
+                            self.data.x, reg.coef_.reshape(-1)+v_[i,:], label=label.split()[0], lw=0.4, color='#2b2b2b', zorder=-1)
+                    else:
+                        axs[0].plot(
+                            self.data.x, reg.coef_.reshape(-1)+v_[i,:], lw=0.4, color='#2b2b2b', zorder=-1)
 
         axs[0].set_ylabel(r'$\beta$')
         axs[0].set_xlabel(x_label)

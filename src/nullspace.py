@@ -150,7 +150,7 @@ class Nullspace():
             #self.con_thres = np.abs(self.con_thres) * np.abs(mse_alpha-mse_beta)
 
         # Activate for debugging purposes/get more insights into how the constraints work.
-        if 0: 
+        if 1: 
             # Run a loop over different values of gamma to see how the proposer NRMSE metric would change.
             gamma_vals = np.logspace(5, -5, 80)
             self.nullsp['v'], self.nullsp['v_'], self.nullsp['norm_'], self.nullsp['gamma'] = self.nullspace_calc(
@@ -171,13 +171,15 @@ class Nullspace():
             ax.set_xscale('log')
             ax.set_yscale('log')
             ax2 = ax.twinx()
-            ax2.plot(gamma_vals, xv, label=r'$c\sqrt{(Xv)^T Xv}$', color='red')
-            ax2.set_ylabel(r'$c\sqrt{(Xv)^T Xv}$')
+            ax2.plot(gamma_vals, xv, label=r'$\tilde{n}$', color='red')
+            ax2.set_ylabel(r'$\tilde{n}$')
             ax2.set_xscale('log')
             ax2.set_yscale('log')
             ax.legend(loc='lower left')
             ax2.legend(loc='upper right')
+            plt.savefig('NRMSE_Xv.pdf')
             plt.show()
+            
 
         self.optimize_gamma(
             gammas_inital=gammas_inital, X=X, y_=y_, 

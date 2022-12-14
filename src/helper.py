@@ -478,9 +478,9 @@ def plot_cv_results(res_dict, key='components'):
     ax[0].scatter(res_dict['cv_res'][key], res_dict['cv_res']['rmse_vals']+res_dict['cv_res']['rmse_std'], color = 'k', label='RMSE + STD')
     ax[0].scatter(res_dict['cv_res'][key], res_dict['cv_res']['rmse_vals']-res_dict['cv_res']['rmse_std'], color = 'k')
     # Scatter a circle around the minimum
-    ax[0].scatter(res_dict['cv_res']['rmse_min_param'], np.min(res_dict['cv_res']['rmse_vals']), color=colors_IBM[1], s=100)
+    ax[0].scatter(res_dict['cv_res']['rmse_min_param'], np.min(res_dict['cv_res']['rmse_vals']), color=colors_IBM[1], s=100, label='RMSE Min')
     # Scatter a circle around the mean rmse that is still within 1 std of the minimum
-    ax[0].scatter(res_dict['cv_res']['rmse_std_min_param'], res_dict['cv_res']['rmse_std_min'], color=colors_IBM[2], s=100)
+    ax[0].scatter(res_dict['cv_res']['rmse_std_min_param'], res_dict['cv_res']['rmse_std_min'], color=colors_IBM[2], s=100, label= 'RMSE within 1 STD of Min')
     
 
     ax[0].set_xlabel(f'Number of {key}')
