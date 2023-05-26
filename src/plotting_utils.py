@@ -1,17 +1,20 @@
 import numpy as np
-import pandas as pd
-import seaborn as sns
+import pandas as pd  # type: ignore
+import seaborn as sns  # type: ignore
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib import cm
-import matplotlib.cm as cmx
+import matplotlib  # type: ignore
+import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.colors as mcolors  # type: ignore
+from matplotlib import cm  # type: ignore
+import matplotlib.cm as cmx  # type: ignore
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import StandardScaler  # type: ignore
+from sklearn.metrics import mean_squared_error  # type: ignore
 
-from src.utils import optimize_pls
-from src.utils import optimize_rr
+
+from src.utils import optimize_pls  # type: ignore
+from src.utils import optimize_rr  # type: ignore
+from src.utils import nrmse  # type: ignore
 
 
 def plot_x_tt2(
@@ -33,7 +36,15 @@ def plot_x_tt2(
     return ax
 
 
-def plot_corrheatmap(ax, x, X, cmap, label, title, cols=True):
+def plot_corrheatmap(
+    ax: plt.axes,
+    x: np.ndarray,
+    X: np.ndarray,
+    cmap: cm,
+    label: str,
+    title: str,
+    cols: bool = True,
+) -> plt.axes:
     if cols:
         X_df = pd.DataFrame(X[:, ::10])
         x = x[::10]
@@ -539,3 +550,45 @@ def plot_X(X, x, ax0_title="Training Data", ax1_title="Z-Scored"):
     ax[1].set_xlim(min(x), max(x))
     ax[1].set_xlabel("Voltage (V)")
     return fig, ax
+
+
+def scatter_predictions(
+    X: np.ndarray,
+    y_: np.ndarray,
+    w: list,
+    labels: list,
+    title: str = "",
+    ax: plt.axes = None,
+    return_fig: bool = False,
+):
+    """Method that scatter plots the predictions associated with different regression coefficients."""
+
+    colors = ["#000000", "#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000"]
+    # ['#332288', '#117733', '#44AA99', '#88CCEE', '#DDCC77', '#CC6677', '#AA4499', '#882255']
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(7, 7))
+    else:
+        fig = ax.get_figure()
+
+    for i, (w_, label) in enumerate(zip(w, labels)):
+        y_pred = X @ w_
+        nrmse_ = nrmse(y_, y_pred)
+        ax.scatter(
+            y_,
+            y_pred,
+            label=f"{label}, NRMSE: {nrmse_:.2f}%",
+            marker="o",
+            color=colors[i],
+        )
+
+    ax.set_xlabel(r"$y-\bar{y}$")
+    ax.set_ylabel(r"$\hat y-\bar{y}$")
+    ax.set_title(title)
+    # Show legend, without frame and fontsize 3 pts smaller than the default
+    # Get the default legend fontsize
+    legend_fontsize = matplotlib.rcParams["legend.fontsize"]
+    ax.legend(frameon=False, fontsize=legend_fontsize - 4)
+
+    if return_fig:
+        return fig, ax

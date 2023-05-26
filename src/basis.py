@@ -1,12 +1,10 @@
-# The following code is partly copied, extended on build on:
-# https://github.com/lawrennd/mlai/
-# based on commit: bb4b776a21ec17001bf20ee6406324217f902944
-# expand it to the different basis funcitons in the source.
+from __future__ import annotations
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as clr
-from src.helper import plot_corrheatmap
-
+import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.colors as clr  # type: ignore
+from basis_function import BasisFunction, PolynomBasis, RadialBasis
+from plotting_utils import plot_corrheatmap
+from typing import Callable
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 cmap_IBM = clr.LinearSegmentedColormap.from_list(
@@ -15,12 +13,14 @@ cmap_IBM = clr.LinearSegmentedColormap.from_list(
 
 
 class BasicsData:
-    """Class that contains all methods to manipulate the data.
-    Basis Data: Generate artificail data based on basis functions.
-    Basic Data: Set data by insertig X and y.
-    """
+    """Class that contains all methods to manipulate the data."""
 
-    def __init__(self, function=None, number=None, X=None, x=None, y=None, **kwargs):
+    def __init__(
+        self,
+        function: BasisFunction,
+        x: np.ndarray,
+        **kwargs,
+    ):
         """Initilize object
         Parameters
         ----------
@@ -34,41 +34,18 @@ class BasicsData:
         """
 
         self.arguments = kwargs
-        self.number = number
         self.function = function
-        self.Phi_vals = None
+        self.number = function.num_basis
         self.x = x
+        self.Phi_vals = self.function(x)
 
+    def set_X_y(self, X: np.ndarray, y: np.ndarray) -> None:
         self.X = X
-        if self.X is None:
-            self.X_ = None
-            self.X_std = None
-            self.stdx = None
-            self.meanx = None
-        else:
-            self = self.standardscaler(scale_y=False, scale_x=True)
-
         self.y = y
-        if self.y is None:
-            self.y_ = None
-            self.y_std = None
-            self.stdy = None
-            self.meany = None
-        else:
-            self = self.standardscaler(scale_y=True, scale_x=False)
+        self = self.standardscaler(scale_y=True, scale_x=False)
+        self = self.standardscaler(scale_y=False, scale_x=True)
 
-    def Phi(self, x):
-        """Create basis vector phi
-        Parameters
-        ----------
-        x : ndarray
-            1D array of x values where the function should be evaluated
-        """
-        self.Phi_vals = self.function(x, num_basis=self.number, **self.arguments)
-        self.x = x
-        return self
-
-    def standardscaler(self, scale_y=True, scale_x=True):
+    def standardscaler(self, *, scale_y: bool = True, scale_x: bool = True) -> BasicsData:
         if scale_x:
             self.stdx = np.std(self.X, axis=0)
             self.meanx = np.mean(self.X, axis=0)
@@ -83,7 +60,7 @@ class BasicsData:
 
         return self
 
-    def construct_X_data(self, basis_weights):
+    def construct_X_data(self, basis_weights: np.ndarray) -> BasicsData:
         """Constructs a data matrix based on
         Parameters
         ----------
@@ -96,13 +73,15 @@ class BasicsData:
             )
         self.X = np.zeros((basis_weights.shape[0], self.Phi_vals.shape[0]))
         for i in range(basis_weights.shape[0]):
-            # Itereate trhough the rows.
+            # Iterate through the rows.
             self.X[i, :] = np.dot(self.Phi_vals, basis_weights[i, :].T)
 
         self = self.standardscaler(scale_y=False, scale_x=True)
         return self
 
-    def construct_y_data(self, targetfun, per_range: list = None):
+    def construct_y_data(
+        self, targetfun: Callable[[np.ndarray], float], per_range: list = None
+    ) -> BasicsData:
         """Construct responsese
 
         Parameters
@@ -136,18 +115,14 @@ class BasicsData:
         self = self.standardscaler(scale_y=True, scale_x=False)
         return self
 
-    def add_wgn(self, add_noise_X=True, snr_x=50, add_noise_y=False, snr_y=50):
+    def add_wgn(self, snr_x: float = None, snr_y: float = None) -> BasicsData:
         """Generates synthethic data to test the linearization methodology.
 
         Arguments
         ---------
-        add_noise_X : bool
-            whether to add wgn to X
-        snr_x : int, default=50
+        snr_x : int, default=None
             Signal to noise ratio of AWGN to be added on the signal
-        add_noise_y : bool
-            whether to add wgn to y
-        snr_y : int, default=50
+        snr_y : int, default=None
             Signal to noise ratio of AWGN to be added on the signal,
 
         Returns
@@ -162,7 +137,7 @@ class BasicsData:
 
         rows, columns = self.X.shape
         # X
-        if add_noise_X:
+        if snr_x is not None:
             for i in range(rows):
                 row_i = self.X[i, :]
                 sig_avg_watts = np.mean(row_i**2)
@@ -179,7 +154,7 @@ class BasicsData:
             # Update the mean centered & std data
             self = self.standardscaler(scale_y=False, scale_x=True)
 
-        if add_noise_y:
+        if snr_y is not None:
             for i, yi in enumerate(self.y):
                 sig_avg_watts = np.mean(yi**2)
                 sig_avg_db = 10 * np.log10(sig_avg_watts)
@@ -198,7 +173,14 @@ class BasicsData:
         return self
 
     # A bunch of plotting functions
-    def plot_row_column_corrheatmap(self, x_label, y_label, cmap=None, axs=None):
+    def plot_row_column_corrheatmap(
+        self,
+        x_label: str,
+        y_label: str,
+        axs: plt.axes = None,
+        *,
+        cmap: bool = None,
+    ) -> plt.axes:
         if axs is None:
             fig, axs = plt.subplots(1, 2, figsize=(12, 6))
         if cmap is None:
@@ -217,7 +199,9 @@ class BasicsData:
         )
         return axs
 
-    def plot_stats(self, ax, c1, c2, c3, labelx, labely):
+    def plot_stats(
+        self, ax: plt.axes, c1: str, c2: str, c3: str, labelx: str, labely: str
+    ) -> plt.axes:
         ax.plot(self.x, np.abs(np.mean(self.X, axis=0)), label="|Mean|", lw=2.5, color=c1)
         ax.plot(
             self.x,
@@ -234,131 +218,17 @@ class BasicsData:
         return ax
 
 
-# Differen basis for functions.e
-def polynomial(x, num_basis=4, data_limits: list = None):
-    """Polynomial basis"""
-
-    if data_limits is None:
-        data_limits = [-1.0, 1.0]
-
-    centre = data_limits[0] / 2.0 + data_limits[1] / 2.0
-    span = data_limits[1] - data_limits[0]
-    z = np.asarray(x, dtype=float) - centre
-    z = 2 * z / span
-    Phi = np.zeros((x.shape[0], num_basis))
-    for i in range(num_basis):
-        Phi[:, i : i + 1] = z**i
-    return Phi
-
-
-def radial(x, num_basis=4, data_limits: list = None, width=None):
-    """Radial basis constructed using exponentiated quadratic form."""
-
-    if data_limits is None:
-        data_limits = [-1.0, 1.0]
-
-    if num_basis > 1:
-        centres = np.linspace(data_limits[0], data_limits[1], num_basis)
-        if width is None:
-            width = (centres[1] - centres[0]) / 2.0
-    else:
-        centres = np.asarray([data_limits[0] / 2.0 + data_limits[1] / 2.0])
-        if width is None:
-            width = (data_limits[1] - data_limits[0]) / 2.0
-
-    Phi = np.zeros((x.shape[0], num_basis))
-    for i in range(num_basis):
-        Phi[:, i : i + 1] = np.exp(
-            -0.5 * ((np.asarray(x, dtype=float) - centres[i]) / width) ** 2
-        )
-    return Phi
-
-
-def fourier(x, num_basis=4, data_limits: list = None):
-    """Fourier basis"""
-
-    if data_limits is None:
-        data_limits = [-1.0, 1.0]
-
-    tau = 2 * np.pi
-    # span = float(data_limits[1] - data_limits[0])
-    Phi = np.ones((x.shape[0], num_basis))
-    for i in range(1, num_basis):
-        if i % 2:
-            Phi[:, i : i + 1] = np.sin((i + 1) * tau * np.asarray(x, dtype=float))
-        else:
-            Phi[:, i : i + 1] = np.cos((i + 1) * tau * np.asarray(x, dtype=float))
-    return Phi
-
-
-def relu(x, num_basis=4, data_limits: list = None, gain=None):
-    """Rectified linear units basis"""
-
-    if data_limits is None:
-        data_limits = [-1.0, 1.0]
-
-    if num_basis > 2:
-        centres = np.linspace(data_limits[0], data_limits[1], num_basis)[:-1]
-    elif num_basis == 2:
-        centres = np.asarray([data_limits[0] / 2.0 + data_limits[1] / 2.0])
-    else:
-        centres = []
-    if num_basis < 3:
-        basis_gap = data_limits[1] - data_limits[0]
-    else:
-        basis_gap = (data_limits[1] - data_limits[0]) / (num_basis - 2)
-    if gain is None:
-        gain = np.ones(num_basis - 1) / basis_gap
-    Phi = np.zeros((x.shape[0], num_basis))
-    # Create the bias
-    Phi[:, 0] = 1.0
-    for i in range(1, num_basis):
-        Phi[:, i : i + 1] = (
-            gain[i - 1]
-            * (np.asarray(x, dtype=float) > centres[i - 1])
-            * (np.asarray(x, dtype=float) - centres[i - 1])
-        )
-    return Phi
-
-
-def hyperbolic_tangent(x, num_basis=4, data_limits: list = None, gain=None):
-    """Hyperbolic tangents"""
-
-    if data_limits is None:
-        data_limits = [-1.0, 1.0]
-
-    if num_basis > 2:
-        centres = np.linspace(data_limits[0], data_limits[1], num_basis - 1)
-        width = (centres[1] - centres[0]) / 2.0
-    elif num_basis == 2:
-        centres = np.asarray([data_limits[0] / 2.0 + data_limits[1] / 2.0])
-        width = (data_limits[1] - data_limits[0]) / 2.0
-    else:
-        centres = []
-        width = None
-    if gain is None and width is not None:
-        gain = np.ones(num_basis - 1) / width
-    Phi = np.zeros((x.shape[0], num_basis))
-    # Create the bias
-    Phi[:, 0] = 1.0
-    for i in range(1, num_basis):
-        Phi[:, i : i + 1] = np.tanh(
-            gain[i - 1] * (np.asarray(x, dtype=float) - centres[i - 1])
-        )
-    return Phi
-
-
 # Helper functions for this notebook
 def construct_data(
-    x_min,
-    x_max,
-    basis_function,
-    mean_params,
-    stdv_params,
-    num_datapoints=50,
-    draws=10,
-    plot_results=False,
-):
+    x_min: float,
+    x_max: float,
+    basis_function: BasisFunction,
+    mean_params: np.ndarray,
+    stdv_params: np.ndarray,
+    num_datapoints: int = 50,
+    draws: int = 10,
+    plot_results: bool = False,
+) -> BasicsData:
     """Build an object of the basis class based on the passed parameters and return the basis object.
 
     Parameters
@@ -392,9 +262,9 @@ def construct_data(
     ValueError
         If objtype string does not match one of the implemented options.
     """
-    num_basis = len(mean_params)
+    # num_basis = len(mean_params)
     x = np.linspace(x_min, x_max, num_datapoints)[:, None]
-    obj = BasicsData(basis_function, num_basis).Phi(x)
+    obj = BasicsData(basis_function, x)
 
     # Draw the parameters for the matrix
     # m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
@@ -416,18 +286,18 @@ def construct_data(
 
 
 def construct_plot_data_interactive(
-    x_min,
-    x_max,
-    basis_function,
-    mean_param0,
-    mean_param1,
-    mean_param2,
-    stdv_params0,
-    stdv_params1,
-    stdv_params2,
-    num_datapoints=50,
-    draws=10,
-):
+    x_min: float,
+    x_max: float,
+    basis_function: BasisFunction,
+    mean_param0: float,
+    mean_param1: float,
+    mean_param2: float,
+    stdv_params0: float,
+    stdv_params1: float,
+    stdv_params2: float,
+    num_datapoints: int = 50,
+    draws: int = 10,
+) -> None:
     """Wraper around 'construct_plot_data' to interact with ipython widget"""
     mean_params = np.array([mean_param0, mean_param1, mean_param2])
     stdv_params = np.array([stdv_params0, stdv_params1, stdv_params2])
@@ -440,6 +310,6 @@ def construct_plot_data_interactive(
         stdv_params,
         num_datapoints=num_datapoints,
         draws=draws,
-        plot_results=1,
+        plot_results=True,
     )
     return None

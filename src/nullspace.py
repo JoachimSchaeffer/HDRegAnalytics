@@ -4,8 +4,8 @@ from scipy import linalg
 from sklearn.metrics import mean_squared_error
 import matplotlib as mpl
 import matplotlib.pylab as plt
-from src.helper import nrmse
-from src.helper import plot_nullspace_correction
+from src.utils import nrmse
+from src.plotting_utils import plot_nullspace_correction, scatter_predictions
 
 
 class Nullspace:
@@ -184,19 +184,19 @@ class Nullspace:
                 self.nullsp["norm_"],
                 self.nullsp["gamma"],
             ) = self.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
-            nrmse = []
+            nrmse_list = []
             xv = []
             for i, gamma in enumerate(gamma_vals):
                 # Evaluate the NRMSE metric
                 cons, con_xv = self.eval_constraint(
                     X, y_, key_alpha, key_beta, gamma, method="NRMSE_Xv"
                 )
-                nrmse.append(cons)
+                nrmse_list.append(cons)
                 xv.append(con_xv)
 
             # MAke a plot with two y-axis to show the NRMSE and the Xv metric
             fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-            ax.plot(gamma_vals, nrmse, label=r"$\Delta$ NRMSE")
+            ax.plot(gamma_vals, nrmse_list, label=r"$\Delta$ NRMSE")
             ax.set_xlabel(r"$\gamma$")
             ax.set_ylabel(r"$\Delta$ NRMSE")
             ax.set_xscale("log")
@@ -508,9 +508,6 @@ class Nullspace:
 
     def scatter_predictions(self, std=False, title="", ax=None, return_fig=False):
         """Method that scatters based on nullspace correction."""
-
-        colors = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
-        # ['#332288', '#117733', '#44AA99', '#88CCEE', '#DDCC77', '#CC6677', '#AA4499', '#882255']
         y_ = self.data.y_
 
         if std:
@@ -522,54 +519,14 @@ class Nullspace:
             w_alpha = self.nullsp["w_alpha"]
             w_beta = self.nullsp["w_beta"]
 
-        y_pred_nulls = X @ (w_alpha + self.nullsp["v_"][-1, :])
-        y_pred_alpha = X @ w_alpha
-        y_pred_beta = X @ w_beta
+        w = [(w_alpha + self.nullsp["v_"][-1, :]), w_alpha, w_beta]
+        labels = [
+            r"$\mathbf{X}(\beta + \mathbf{v})$",
+            r"$\mathbf{X}\beta$",
+            r"$\mathbf{X}\beta_{T1}$",
+        ]
 
-        # Put the NRMSE in the label to be sure everything is implemented correctly
-        nrmse_nulls = nrmse(y_, y_pred_nulls)
-        nrmse_alpha = nrmse(y_, y_pred_alpha)
-        nrmse_beta = nrmse(y_, y_pred_beta)
-
-        if ax is None:
-            fig, ax = plt.subplots(1, 1, figsize=(7, 7))
-        else:
-            fig = ax.get_figure()
-
-        ax.scatter(
-            self.data.y_,
-            y_pred_beta,
-            label=r"$\mathbf{X}\beta_{T1}$" + f", NRMSE: {nrmse_beta:.2f}%",
-            marker="<",
-            color=colors[5],
-        )
-        ax.scatter(
-            self.data.y_,
-            y_pred_alpha,
-            label=r"$\mathbf{X}\beta$" + f", NRMSE: {nrmse_alpha:.2f}%",
-            marker="v",
-            color=colors[1],
-        )
-        ax.scatter(
-            self.data.y_,
-            y_pred_nulls,
-            label=r"$\mathbf{X}(\beta + \mathbf{v})$" + f", NRMSE: {nrmse_nulls:.2f}%",
-            marker="^",
-            color=colors[2],
-        )
-
-        ax.set_xlabel(r"$y-\bar{y}$")
-        ax.set_ylabel(r"$\hat y-\bar{y}$")
-        ax.set_title(title)
-        # Show legend, without frame and fontsize 3 pts smaller than the default
-        # Get the default legend fontsize
-        legend_fontsize = mpl.rcParams["legend.fontsize"]
-        ax.legend(frameon=False, fontsize=legend_fontsize - 4)
-
-        if return_fig:
-            return fig, ax
-        else:
-            return
+        return scatter_predictions(X, y_, w, labels, ax=ax, return_fig=return_fig)
 
 
 # Todo: Theres something wrong with this function. Should be dubugged if used or deleted.

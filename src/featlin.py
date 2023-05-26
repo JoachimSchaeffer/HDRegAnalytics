@@ -22,7 +22,7 @@ from src.basis import BasicsData
 from src.nullspace import Nullspace
 from src.nullspace import format_label, nrmse
 
-from src.helper import optimize_cv
+from plotting_utils import optimize_cv
 
 import jax.numpy as jnp
 from jax import jacfwd
