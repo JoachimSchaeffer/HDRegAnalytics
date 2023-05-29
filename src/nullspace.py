@@ -1,11 +1,31 @@
+from __future__ import annotations
 import numpy as np
 from numpy import linalg as LA
-from scipy import linalg
-from sklearn.metrics import mean_squared_error
-import matplotlib as mpl
-import matplotlib.pylab as plt
-from src.utils import nrmse
-from src.plotting_utils import plot_nullspace_correction, scatter_predictions
+from scipy import linalg  # type: ignore
+from sklearn.metrics import mean_squared_error  # type: ignore
+import matplotlib.pylab as plt  # type: ignore
+from plotting_utils import plot_nullspace_correction
+from plotting_utils import scatter_predictions as scatter_predictions_helper
+from basis import BasicsData
+from typing import Union
+from typing import Protocol
+
+# from typing_extensions import Protocol  # for Python <3.8
+
+
+# source: https://stackoverflow.com/questions/54868698/what-type-is-a-sklearn-model
+class ScikitModel(Protocol):
+    def fit(self, X, y, sample_weight=None):
+        ...
+
+    def predict(self, X):
+        ...
+
+    def score(self, X, y, sample_weight=None):
+        ...
+
+    def set_params(self, **params):
+        ...
 
 
 class Nullspace:
@@ -15,17 +35,16 @@ class Nullspace:
     """
 
     def __init__(self, data, **kwargs):
-        self.weights = (
-            {}
-        )  # Dictionary to store weights learned from mean subtracted data X_
-        self.nullsp = {}
-        self.data = data  # Should be a BasicsCalss object or duck type
-        self.con_thres = None
-        self.con_val = None
-        self.opt_gamma_method = None
-        self.max_gamma = None
+        # Dictionary to store weights learned from mean subtracted data X_
+        self.weights: dict = {}
+        self.nullsp: dict = {}
+        self.data: BasicsData = data  # Should be a BasicsCalss object or duck type
+        self.con_thres: float = None
+        self.con_val: float = None
+        self.opt_gamma_method: str = None
+        self.max_gamma: float = None
 
-    def learn_weights(self, models, string_id):
+    def learn_weights(self, models: list[ScikitModel], string_id: str) -> Nullspace:
         """Learn weights from data and sotre them in the dictionary.
 
         Parameters
@@ -56,21 +75,21 @@ class Nullspace:
 
     def nullspace_correction(
         self,
-        w_alpha=None,
-        w_alpha_name=None,
-        w_beta=None,
-        w_beta_name=None,
-        std=False,
-        plot_results=False,
-        save_plot=False,
-        path_save="",
-        file_name="",
-        multi_gammas=True,
-        con_thres=0.5,
-        opt_gamma_method="Xv",
-        gammas_inital=np.geomspace(10**11, 10 ** (-5), 10),
+        w_alpha: np.ndarray = None,
+        w_alpha_name: np.ndarray = None,
+        w_beta: np.ndarray = None,
+        w_beta_name: np.ndarray = None,
+        std: bool = False,
+        plot_results: bool = False,
+        save_plot: bool = False,
+        path_save: str = "",
+        file_name: str = "",
+        multi_gammas: bool = True,
+        con_thres: float = 0.5,
+        opt_gamma_method: str = "Xv",
+        gammas_inital: np.ndarray = np.geomspace(10**11, 10 ** (-5), 10),
         **kwargs,
-    ):
+    ) -> Union[Nullspace, tuple[Nullspace, plt.figure, plt.axes]]:
         """Function that calls 'nullspace_calc allowing to shorten syntax.
 
         Parameters
@@ -126,14 +145,16 @@ class Nullspace:
         # In case std==False this is not efficient, because the standardized coef. aren't used.
         if w_alpha is None:
             self.nullsp["w_alpha"] = self.weights[kwargs.get("key_alpha")]
-            self.nullsp["w_alpha_std"] = self.weights[kwargs.get("key_alpha") + " std"]
+            self.nullsp["w_alpha_std"] = self.weights[
+                str(kwargs.get("key_alpha")) + " std"
+            ]
         else:
             self.nullsp["w_alpha"] = w_alpha
             self.nullsp["w_alpha_std"] = w_alpha * self.data.stdx
 
         if w_beta is None:
             self.nullsp["w_beta"] = self.weights[kwargs.get("key_beta")]
-            self.nullsp["w_beta_std"] = self.weights[kwargs.get("key_beta") + " std"]
+            self.nullsp["w_beta_std"] = self.weights[str(kwargs.get("key_beta")) + " std"]
         else:
             self.nullsp["w_beta"] = w_beta
             self.nullsp["w_beta_std"] = w_beta * self.data.stdx
@@ -179,17 +200,16 @@ class Nullspace:
             # Run a loop over different values of gamma to see how the proposer NRMSE metric would change.
             gamma_vals = np.logspace(5, -5, 80)
             (
-                self.nullsp["v"],
                 self.nullsp["v_"],
                 self.nullsp["norm_"],
                 self.nullsp["gamma"],
             ) = self.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
             nrmse_list = []
             xv = []
-            for i, gamma in enumerate(gamma_vals):
+            for gamma in gamma_vals:
                 # Evaluate the NRMSE metric
                 cons, con_xv = self.eval_constraint(
-                    X, y_, key_alpha, key_beta, gamma, method="NRMSE_Xv"
+                    X, y_, key_alpha, key_beta, gamma=gamma, method="NRMSE_Xv"
                 )
                 nrmse_list.append(cons)
                 xv.append(con_xv)
@@ -212,11 +232,11 @@ class Nullspace:
             plt.show()
 
         self.optimize_gamma(
-            gammas_inital=gammas_inital,
             X=X,
             y_=y_,
             key_alpha=key_alpha,
             key_beta=key_beta,
+            gammas_inital=gammas_inital,
             multi_gammas=multi_gammas,
         )
 
@@ -230,13 +250,13 @@ class Nullspace:
 
     def optimize_gamma(
         self,
-        gammas_inital=np.geomspace(10**11, 10 ** (-5), 10),
-        X=None,
-        y_=None,
-        key_alpha=None,
-        key_beta=None,
-        multi_gammas=False,
-    ):
+        X: np.ndarray,
+        y_: np.ndarray,
+        key_alpha: str,
+        key_beta: str,
+        gammas_inital: np.ndarray = np.geomspace(10**11, 10 ** (-5), 10),
+        multi_gammas: bool = False,
+    ) -> None:
         """Optimize the gamma parameter for the nullspace correction.
         This is a simple (but ineffective way) way of optimizing which should suffice for this issue.
 
@@ -250,10 +270,10 @@ class Nullspace:
         for i in range(depth):
             # print('Iteration: ', i)
             for j, gamma in enumerate(gammas_):
-                con_val = self.eval_constraint(
+                con_val, _ = self.eval_constraint(
                     X, y_, key_alpha, key_beta, gamma, method=self.opt_gamma_method
                 )
-                # cons = self.eval_constraint(X, y_, key_alpha, key_beta, gamma, method='NRMSE')
+                # cons, _ = self.eval_constraint(X, y_, key_alpha, key_beta, gamma, method='NRMSE')
                 cons_list.append(con_val)
                 if con_val >= eps + self.con_thres:
                     break
@@ -263,7 +283,7 @@ class Nullspace:
                 if i == 0:
                     gammas = np.geomspace(gammas_inital[j - 1], gammas_inital[j], 3)
                     # We will only test gamm in the middle of the interval.
-                    gammas_ = [gammas[1]]
+                    gammas_ = np.array(gammas[1])
                 else:
                     # TODO: Fix this, then fix nullspace paper.
                     if con_val >= eps + self.con_thres:
@@ -271,7 +291,7 @@ class Nullspace:
                     else:
                         idx_high = 1
                     gammas = np.geomspace(gammas[idx_high], gammas[idx_high + 1], 3)
-                    gammas_ = [gammas[1]]
+                    gammas_ = np.array(gammas[1])
 
         self.max_gamma = gamma
         self.con_val = con_val
@@ -295,18 +315,17 @@ class Nullspace:
         #     method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
         # self.max_gamma = gamma_upper_limit.x[0]
 
-        if multi_gammas:
+        if multi_gammas & (type(self.max_gamma) == float):
             gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
         else:
-            gamma_vals = [self.max_gamma]
+            gamma_vals = np.array(self.max_gamma)
 
         (
-            self.nullsp["v"],
             self.nullsp["v_"],
             self.nullsp["norm_"],
             self.nullsp["gamma"],
         ) = self.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
-        con_val = self.eval_constraint(
+        con_val, _ = self.eval_constraint(
             X, y_, key_alpha, key_beta, gamma_vals[-1], method=self.opt_gamma_method
         )
         print(f"Constraint value: {con_val:.12f}, Method {self.opt_gamma_method}")
@@ -317,12 +336,18 @@ class Nullspace:
             self.nullsp["gamma"] = 0
             self.max_gamma = np.inf
 
-        return
-
-    def eval_constraint(self, X, y_, key_alpha, key_beta, gamma, method="NRMSE"):
+    def eval_constraint(
+        self,
+        X: np.ndarray,
+        y_: np.ndarray,
+        key_alpha: str,
+        key_beta: str,
+        gamma: float,
+        method: str = "NRMSE",
+    ) -> tuple[float, float]:
         # print(f'Gamma: {gamma}')
         # n = self.data.X.shape[0]
-        v, v_, norm_, gs = self.nullspace_calc(key_alpha, key_beta, X, gs=[gamma])
+        v_, _, _ = self.nullspace_calc(key_alpha, key_beta, X, gs=np.array(gamma))
         # val = mean_squared_error(y_, X@(v_.reshape(-1)), squared=False)
         if method == "MSE":
             mse_reg = mean_squared_error(y_, X @ (self.nullsp[key_alpha]), squared=False)
@@ -373,7 +398,6 @@ class Nullspace:
             )
             # con_xv = np.sqrt(1000)*np.sum((X@v_.reshape(-1))**2)/(np.max(pred_model)-np.min(pred_model))
             # print(val)
-            return [val, con_xv]
         elif method == "Xv":
             # pred_lin = X @ (self.nullsp[key_beta])
             pred_model = X @ (self.nullsp[key_alpha])
@@ -382,9 +406,13 @@ class Nullspace:
                 * np.sqrt(np.average((X @ v_.reshape(-1)) ** 2))
                 / (np.max(pred_model) - np.min(pred_model))
             )
-        return val
+            # Flag conxy, "Xv" method
+            con_xv = -1
+        return val, con_xv
 
-    def nullspace_calc(self, key_alpha, key_beta, X, gs: np.array = None):
+    def nullspace_calc(
+        self, key_alpha: str, key_beta: str, X: np.ndarray, gs: np.ndarray = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """This functions performs a nulspace normalization of regression coefficents.
         The problem is set up such that the L2 norm differences between ther regression
         coefficients is minimzed.
@@ -461,9 +489,11 @@ class Nullspace:
         # right = np.concatenate((-v12@v22.T, -v22@v22.T), axis=0)
         # v_ = np.concatenate((left, right), axis=1)@w
 
-        return np.inf, v_, norm_, gs
+        return v_, norm_, gs
 
-    def plot_nullspace_correction(self, std=False, title=""):
+    def plot_nullspace_correction(
+        self, std: bool = False, title: str = ""
+    ) -> tuple[plt.figure, plt.axes]:
         """Method that calls plot_nullspace_correction, uses basis object.
 
         Parameters
@@ -506,7 +536,13 @@ class Nullspace:
         )
         return fig, ax
 
-    def scatter_predictions(self, std=False, title="", ax=None, return_fig=False):
+    def scatter_predictions(
+        self,
+        std: bool = False,
+        title: str = "",
+        ax: bool = None,
+        return_fig: bool = False,
+    ):
         """Method that scatters based on nullspace correction."""
         y_ = self.data.y_
 
@@ -526,10 +562,10 @@ class Nullspace:
             r"$\mathbf{X}\beta_{T1}$",
         ]
 
-        return scatter_predictions(X, y_, w, labels, ax=ax, return_fig=return_fig)
+        return scatter_predictions_helper(X, y_, w, labels, ax=ax, return_fig=return_fig)
 
 
-# Todo: Theres something wrong with this function. Should be dubugged if used or deleted.
+# TODO: Theres something wrong with this function. Should be dubugged if used or deleted.
 if 0:
 
     def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, verbose=True, std=False):

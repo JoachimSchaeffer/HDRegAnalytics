@@ -1,14 +1,14 @@
 import numpy as np
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 
-from sklearn.cross_decomposition import PLSRegression
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import KFold
-from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
+from sklearn.cross_decomposition import PLSRegression  # type: ignore
+from sklearn.linear_model import Ridge  # type: ignore
+from sklearn.model_selection import cross_val_score  # type: ignore
+from sklearn.model_selection import KFold  # type: ignore
+from sklearn.model_selection import GridSearchCV  # type: ignore
+from sklearn.preprocessing import StandardScaler  # type: ignore
+from sklearn.metrics import mean_squared_error  # type: ignore
 
 
 def optimize_pls(
@@ -437,13 +437,16 @@ def optimise_pls_cv(
         "rmse_vals": rmse,
         "components": components,
         "rmse_std_min": rmse_std_min,
-        "l2_distance": np.array(l2_distance),
+        "l2_distance": np.ndarray(l2_distance),
     }
     return res_dict
 
 
 def nrmse(
-    y: np.array = None, y_pred: np.array = None, X: np.array = None, beta: np.array = None
+    y: np.ndarray,
+    y_pred: np.ndarray = None,
+    X: np.ndarray = None,
+    beta: np.ndarray = None,
 ):
     """Normalized root mean squared error
 
@@ -456,7 +459,7 @@ def nrmse(
     beta : array-like
         Regression coefficients
     """
-    if y_pred is None:
+    if y_pred is None and (X is not None and beta is not None):
         y_pred = X @ beta
 
     return 100 * mean_squared_error(y, y_pred, squared=False) / (np.max(y) - np.min(y))

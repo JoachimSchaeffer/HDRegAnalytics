@@ -11,10 +11,9 @@ import matplotlib.cm as cmx  # type: ignore
 from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 
-
-from src.utils import optimize_pls  # type: ignore
-from src.utils import optimize_rr  # type: ignore
-from src.utils import nrmse  # type: ignore
+from utils import optimize_pls  # type: ignore
+from utils import optimize_rr  # type: ignore
+from utils import nrmse  # type: ignore
 
 
 def plot_x_tt2(
