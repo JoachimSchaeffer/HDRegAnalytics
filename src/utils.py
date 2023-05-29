@@ -12,16 +12,15 @@ from sklearn.metrics import mean_squared_error  # type: ignore
 
 
 def optimize_pls(
-    X,
-    y,
-    max_comps=20,
-    folds=10,
-    nb_stds=1,
-    min_distance_search=False,
-    featlin=0,
-    verbose=False,
+    X: np.ndarray,
+    y: np.ndarray,
+    max_comps: int = 20,
+    folds: int = 10,
+    nb_stds: int = 1,
+    min_distance_search: bool = False,
+    featlin: float = 0,
     **kwargs,
-):
+) -> dict:
     """Optimize the number of components for PLS regression."""
 
     components = np.arange(1, max_comps + 1).astype("uint8")
@@ -54,7 +53,7 @@ def optimize_pls(
             dist_l2.append(np.linalg.norm(diff_vec, ord=2))
 
     if min_distance_search:
-        dist_l2 = np.array(dist_l2)
+        dist_l2 = list(np.array(dist_l2))
         l2_min_loc = np.argmin(dist_l2)
         l2_dist_min_comp = components[l2_min_loc]
 
@@ -117,22 +116,22 @@ def optimize_pls(
 
 
 def optimize_rr(
-    X,
-    y,
+    X: np.ndarray,
+    y: np.ndarray,
     alpha_lim: list = None,
-    folds=5,
-    nb_stds=1,
-    plot=False,
-    min_distance_search=True,
-    featlin: list = None,
-    verbose=False,
-):
+    folds: int = 5,
+    nb_stds: int = 1,
+    min_distance_search: bool = True,
+    featlin: float = 0,
+    verbose: bool = False,
+) -> dict:
     """Crossvalidation of RR algorithm and plotting of results"""
 
     if alpha_lim is None:
         alpha_lim = [10e-5, 10e3]
-    if featlin is None:
-        featlin = []
+    # TODO: Whats that line for?
+    # if featlin is None:
+    #     featlin = []
 
     nb_iterations = 20
     nb_selected_values = 8
@@ -318,15 +317,15 @@ def optimize_rr(
 
 
 def optimise_pls_cv(
-    X,
-    y,
-    max_comps=20,
-    folds=10,
-    plot_components=False,
-    std=False,
-    min_distance_search=False,
-    featlin=[],
-):
+    X: np.ndarray,
+    y: np.ndarray,
+    max_comps: int = 20,
+    folds: int = 10,
+    plot_components: bool = False,
+    std: bool = False,
+    min_distance_search: bool = False,
+    featlin: list = [],
+) -> dict:
     """Crossvalidation of PLS algorithm and plotting of results.
 
     Parameters
@@ -343,13 +342,6 @@ def optimise_pls_cv(
         Indicate whether to plot results
     std : bool, default=False
         Inidcates whether to standardize/z-score X
-
-    Returns
-    -------
-    rmse : ndarray
-        mean of rmse for all folds for each number of comp
-    components : ndarray
-        list of components tested for cv
     """
 
     components = np.arange(1, max_comps + 1).astype("uint8")
@@ -447,7 +439,7 @@ def nrmse(
     y_pred: np.ndarray = None,
     X: np.ndarray = None,
     beta: np.ndarray = None,
-):
+) -> float:
     """Normalized root mean squared error
 
     Parameters

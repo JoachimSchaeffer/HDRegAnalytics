@@ -15,10 +15,20 @@ from utils import optimize_pls  # type: ignore
 from utils import optimize_rr  # type: ignore
 from utils import nrmse  # type: ignore
 
+from typing import Union
+
 
 def plot_x_tt2(
-    X, x, ax, color, labelx, labely, label_data="Training", zorder=1, **kwargs
-):
+    X: np.ndarray,
+    x: np.ndarray,
+    ax: plt.axes,
+    color: str,
+    labelx: str,
+    labely: str,
+    label_data: str = "Training",
+    zorder: int = 1,
+    **kwargs,
+) -> plt.axes:
     """Plot Data"""
     # Get linestyle kwarg if it exists
     if "linestyle" in kwargs:
@@ -90,21 +100,21 @@ def plot_corrheatmap(
 
 
 def optimize_cv(
-    X,
-    y,
-    max_comps=20,
+    X: np.ndarray,
+    y: np.ndarray,
+    max_comps: int = 20,
     alpha_lim: list = None,
-    folds=10,
-    nb_stds=1,
-    plot_components=False,
-    std=False,
-    stdv=None,
-    min_distance_search=False,
-    featlin=0,
-    algorithm="PLS",
-    verbose=False,
+    folds: int = 10,
+    nb_stds: int = 1,
+    plot_components: bool = False,
+    std: bool = False,
+    stdv: np.ndarray = None,
+    min_distance_search: bool = False,
+    featlin: float = 0,
+    algorithm: str = "PLS",
+    verbose: bool = False,
     **kwargs,
-):
+) -> dict:
     """Crossvalidation or optimization of regression coefficient distance for PLS or RR
 
     Parameters
@@ -124,12 +134,6 @@ def optimize_cv(
     std : bool, default=False
         Inidcates whether to standardize/z-score X
 
-    Returns
-    -------
-    rmse : ndarray
-        mean of rmse for all folds for each number of comp
-    components : ndarray
-        list of components tested for cv
     """
     if alpha_lim is None:
         alpha_lim = [10e-5, 10e3]
@@ -179,7 +183,7 @@ def optimize_cv(
     return res_dict
 
 
-def plot_cv_results(res_dict, key="components"):
+def plot_cv_results(res_dict: dict, key: str = "components") -> None:
     """Plot the results of the cross validation function"""
     colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -253,7 +257,9 @@ def plot_cv_results(res_dict, key="components"):
     plt.show()
 
 
-def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+def truncate_colormap(
+    cmap: matplotlib.cm, minval: float = 0.0, maxval: float = 1.0, n: int = 100
+) -> matplotlib.cm:
     """Truncates a colormap. This is important because a) many people are partly colorblind and a lot of
     colormaps unsuited for them, and b) a lot of colormaps include yellow whichcanbe hard to see on some
     screens and bad quality prints.
@@ -282,7 +288,7 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
     return new_cmap
 
 
-def format_label(max_gamma, con_val=-9999, method=""):
+def format_label(max_gamma: float, con_val: float = -9999, method: str = "") -> str:
     """Helps with label formatting for the nullspace!
 
     Parameters
@@ -332,7 +338,7 @@ def format_label(max_gamma, con_val=-9999, method=""):
     return label
 
 
-def dec_sci_switch(number, decimal_switch=3, sci_acc=2):
+def dec_sci_switch(number: float, decimal_switch: int = 3, sci_acc: int = 2) -> str:
     """Switch between decimal and scientific notation"""
     if number < 10 ** (-decimal_switch):
         return f"{number:.{sci_acc}e}"
@@ -343,21 +349,21 @@ def dec_sci_switch(number, decimal_switch=3, sci_acc=2):
 
 
 def plot_nullspace_correction(
-    w_alpha,
-    w_beta,
-    v,
-    gs,
-    X,
-    x,
-    y,
-    name="",
-    coef_name_alpha="",
-    coef_name_beta="",
-    return_fig=True,
-    max_gamma=-9999,
-    con_val=-9999,
-    method="",
-):
+    w_alpha: np.ndarray,
+    w_beta: np.ndarray,
+    v: np.ndarray,
+    gs: np.ndarray,
+    X: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    name: str = "",
+    coef_name_alpha: str = "",
+    coef_name_beta: str = "",
+    return_fig: bool = True,
+    max_gamma: float = -9999,
+    con_val: float = -9999,
+    method: str = "",
+) -> Union[tuple[plt.figure, plt.axes], None]:
     """Plot the nullspace correction
 
     Parameters
@@ -524,7 +530,12 @@ def plot_nullspace_correction(
         return None
 
 
-def plot_X(X, x, ax0_title="Training Data", ax1_title="Z-Scored"):
+def plot_X(
+    X: np.ndarray,
+    x: np.ndarray,
+    ax0_title: str = "Training Data",
+    ax1_title: str = "Z-Scored",
+) -> tuple[plt.figure, plt.axes]:
     stdx = np.std(X, axis=0)
     meanx = np.mean(X, axis=0)
     X_ = X - meanx
@@ -559,7 +570,7 @@ def scatter_predictions(
     title: str = "",
     ax: plt.axes = None,
     return_fig: bool = False,
-):
+) -> Union[tuple[plt.figure, plt.axes], None]:
     """Method that scatter plots the predictions associated with different regression coefficients."""
 
     colors = ["#000000", "#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000"]
@@ -591,3 +602,5 @@ def scatter_predictions(
 
     if return_fig:
         return fig, ax
+    else:
+        return None
