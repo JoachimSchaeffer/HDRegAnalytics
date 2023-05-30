@@ -266,7 +266,10 @@ class Nullspace:
         eps = 10**-7
         cons_list = []
         gammas_ = gammas_inital
+        if gammas_.ndim == 0:
+            gammas_ = gammas_.reshape(1)
 
+        # TODO: Have another look at this optimization!
         for i in range(depth):
             # print('Iteration: ', i)
             for j, gamma in enumerate(gammas_):
@@ -283,7 +286,7 @@ class Nullspace:
                 if i == 0:
                     gammas = np.geomspace(gammas_inital[j - 1], gammas_inital[j], 3)
                     # We will only test gamm in the middle of the interval.
-                    gammas_ = np.array(gammas[1])
+                    gammas_ = np.array(gammas[1]).reshape(1)
                 else:
                     # TODO: Fix this, then fix nullspace paper.
                     if con_val >= eps + self.con_thres:
@@ -291,7 +294,7 @@ class Nullspace:
                     else:
                         idx_high = 1
                     gammas = np.geomspace(gammas[idx_high], gammas[idx_high + 1], 3)
-                    gammas_ = np.array(gammas[1])
+                    gammas_ = np.array(gammas[1]).reshape(1)
 
         self.max_gamma = gamma
         self.con_val = con_val
@@ -318,7 +321,7 @@ class Nullspace:
         if multi_gammas & (type(self.max_gamma) == float):
             gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
         else:
-            gamma_vals = np.array(self.max_gamma)
+            gamma_vals = np.array(self.max_gamma).reshape(1)
 
         (
             self.nullsp["v_"],
@@ -355,6 +358,9 @@ class Nullspace:
                 y_, X @ (self.nullsp[key_alpha] + v_.reshape(-1)), squared=False
             )
             val = np.abs(mse_reg - mse_nulls)
+
+            # TODO: Flag conxy, "Xv" method
+            con_xv = -1
         elif method == "NRMSE":
             nrmse_reg = (
                 100
@@ -372,6 +378,9 @@ class Nullspace:
                 X.shape[1]
             ) * np.average(X @ v_.reshape(-1) ** 2) / (np.max(y_) - np.min(y_))
             # print(f'Delta MSE of gamma: {val}')
+
+            # TODO: Flag conxy, "Xv" method
+            con_xv = -1
         elif method == "NRMSE_Xv":
             nrmse_reg = (
                 100
@@ -406,7 +415,8 @@ class Nullspace:
                 * np.sqrt(np.average((X @ v_.reshape(-1)) ** 2))
                 / (np.max(pred_model) - np.min(pred_model))
             )
-            # Flag conxy, "Xv" method
+
+            # TODO: Flag conxy, "Xv" method
             con_xv = -1
         return val, con_xv
 
@@ -456,7 +466,10 @@ class Nullspace:
         I_ = np.identity(shape[1])
 
         # Do the magic:
-        nb_gs = len(gs)
+        nb_gs = gs.size
+        # if gs has 0 dim, add a dimension
+        if gs.ndim == 0:
+            gs = gs.reshape(1)
         v_ = np.zeros((nb_gs, shape[1]))
         norm_ = np.zeros(nb_gs)
 

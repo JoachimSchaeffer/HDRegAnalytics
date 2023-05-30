@@ -26,6 +26,7 @@ data/*
 
 # Mac users
 .DS_Store
+.vscode/
 
 # User-specific stuff
 .idea/**/workspace.xml

@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.colors as clr  # type: ignore
 from basis_function import BasisFunction, PolynomBasis, RadialBasis
 from plotting_utils import plot_corrheatmap
-from typing import Callable
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 cmap_IBM = clr.LinearSegmentedColormap.from_list(
@@ -12,32 +11,12 @@ cmap_IBM = clr.LinearSegmentedColormap.from_list(
 )
 
 
-class BasicsData:
+class HD_Data:
     """Class that contains all methods to manipulate the data."""
 
-    def __init__(
-        self,
-        function: BasisFunction,
-        x: np.ndarray,
-        **kwargs,
-    ):
-        """Initilize object
-        Parameters
-        ----------
-        function : func
-        X : ndarray
-            2D numpy array of data
-        x : ndarray
-            1D numpy array, representing the domain values small x corresponding to each column in X
-        y : ndarray
-            1D array of responses
-        """
-
-        self.arguments = kwargs
-        self.function = function
-        self.number = function.num_basis
+    def __init__(self, x: np.ndarray, **kwargs):
         self.x = x
-        self.Phi_vals = self.function(x)
+        self.arguments = kwargs
 
     def set_X_y(self, X: np.ndarray, y: np.ndarray) -> None:
         self.X = X
@@ -45,7 +24,13 @@ class BasicsData:
         self = self.standardscaler(scale_y=True, scale_x=False)
         self = self.standardscaler(scale_y=False, scale_x=True)
 
-    def standardscaler(self, *, scale_y: bool = True, scale_x: bool = True) -> BasicsData:
+    def set_X_y_from_BasicsData(self, obj: HD_Data) -> None:
+        self.X = obj.X
+        self.y = obj.y
+        self = self.standardscaler(scale_y=True, scale_x=False)
+        self = self.standardscaler(scale_y=False, scale_x=True)
+
+    def standardscaler(self, *, scale_y: bool = True, scale_x: bool = True) -> HD_Data:
         if scale_x:
             self.stdx = np.std(self.X, axis=0)
             self.meanx = np.mean(self.X, axis=0)
@@ -60,62 +45,7 @@ class BasicsData:
 
         return self
 
-    def construct_X_data(self, basis_weights: np.ndarray) -> BasicsData:
-        """Constructs a data matrix based on
-        Parameters
-        ----------
-        basis_weights: ndarray
-            2D array of rows equal to desired observations in the data matrix, cols equal num_basis
-        """
-        if self.number != basis_weights.shape[1]:
-            raise ValueError(
-                "Number of basis weights per observation must equal the number defined for this object!"
-            )
-        self.X = np.zeros((basis_weights.shape[0], self.Phi_vals.shape[0]))
-        for i in range(basis_weights.shape[0]):
-            # Iterate through the rows.
-            self.X[i, :] = np.dot(self.Phi_vals, basis_weights[i, :].T)
-
-        self = self.standardscaler(scale_y=False, scale_x=True)
-        return self
-
-    def construct_y_data(
-        self, targetfun: Callable[[np.ndarray], float], per_range: list = None
-    ) -> BasicsData:
-        """Construct responsese
-
-        Parameters
-        ----------
-        targetfun : callable
-            Underlying relationship between X and y. This can be any function from R^n -> R^1
-            This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology.
-        percentage_range_x_to_t : ndrray, default=[0,1]
-            1D array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1,
-            defines the range of input data that shall be used to generate the target function
-            The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y
-
-        Returns
-        -------
-        y : ndarray
-            1D array of target/response values
-        """
-        if per_range is None:
-            per_range = [0, 1]
-
-        columns = self.X.shape[1]
-        low_ind = int(per_range[0] * columns)
-        high_ind = int(per_range[1] * columns)
-        # self.y = targetfun(self.X[:, low_ind:high_ind])
-
-        rows = self.X.shape[0]
-        self.y = np.zeros([rows])
-        for i in range(rows):
-            row_i = self.X[i, :]
-            self.y[i] = targetfun(row_i[low_ind:high_ind])
-        self = self.standardscaler(scale_y=True, scale_x=False)
-        return self
-
-    def add_wgn(self, snr_x: float = None, snr_y: float = None) -> BasicsData:
+    def add_wgn(self, snr_x: float = None, snr_y: float = None) -> HD_Data:
         """Generates synthethic data to test the linearization methodology.
 
         Arguments
@@ -172,7 +102,6 @@ class BasicsData:
 
         return self
 
-    # A bunch of plotting functions
     def plot_row_column_corrheatmap(
         self,
         x_label: str,
@@ -218,7 +147,6 @@ class BasicsData:
         return ax
 
 
-# Helper functions for this notebook
 def construct_data(
     x_min: float,
     x_max: float,
@@ -228,7 +156,7 @@ def construct_data(
     num_datapoints: int = 50,
     draws: int = 10,
     plot_results: bool = False,
-) -> BasicsData:
+) -> HD_Data:
     """Build an object of the basis class based on the passed parameters and return the basis object.
 
     Parameters
@@ -251,20 +179,10 @@ def construct_data(
     plot_results : bool, default=False
         If True, plot the data matrix.
         IF False, do not plot.
-
-    Returns
-    -------
-    basis_obj : object
-        Initialized object containig the data X.
-
-    Raises
-    ------
-    ValueError
-        If objtype string does not match one of the implemented options.
     """
     # num_basis = len(mean_params)
     x = np.linspace(x_min, x_max, num_datapoints)[:, None]
-    obj = BasicsData(basis_function, x)
+    obj = HD_Data(basis_function, x)
 
     # Draw the parameters for the matrix
     # m = np.random.uniform(low=range_m[0], high=range_m[1], size=rows)
@@ -283,33 +201,3 @@ def construct_data(
         plt.show()
 
     return obj
-
-
-def construct_plot_data_interactive(
-    x_min: float,
-    x_max: float,
-    basis_function: BasisFunction,
-    mean_param0: float,
-    mean_param1: float,
-    mean_param2: float,
-    stdv_params0: float,
-    stdv_params1: float,
-    stdv_params2: float,
-    num_datapoints: int = 50,
-    draws: int = 10,
-) -> None:
-    """Wraper around 'construct_plot_data' to interact with ipython widget"""
-    mean_params = np.array([mean_param0, mean_param1, mean_param2])
-    stdv_params = np.array([stdv_params0, stdv_params1, stdv_params2])
-
-    _ = construct_data(
-        x_min,
-        x_max,
-        basis_function,
-        mean_params,
-        stdv_params,
-        num_datapoints=num_datapoints,
-        draws=draws,
-        plot_results=True,
-    )
-    return None
