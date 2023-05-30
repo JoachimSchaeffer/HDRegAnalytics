@@ -1,3 +1,4 @@
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 import numpy as np
 
 import matplotlib.pyplot as plt  # type: ignore
@@ -72,13 +73,11 @@ def optimize_pls(
     # Train model with optimal number of components
     pls = PLSRegression(n_components=rmsemin_param, scale=False)
     reg = pls.fit(X, y)
-    # Extract the coefficients
     coef_cv = reg.coef_
 
     # Train model with std min number of components
     pls = PLSRegression(n_components=rmse_std_min_param, scale=False)
     reg = pls.fit(X, y)
-    # Extract the coefficients
     coef_std_cv = reg.coef_
 
     cv_res_dict = {
@@ -96,7 +95,6 @@ def optimize_pls(
     if min_distance_search:
         pls = PLSRegression(n_components=l2_dist_min_comp, scale=False)
         reg = pls.fit(X, y)
-        # Extract the coefficients
         coef_min_dist = reg.coef_
 
     if min_distance_search:
@@ -115,6 +113,7 @@ def optimize_pls(
     return {"cv_res": cv_res_dict, "algorithm": "PLS"}
 
 
+# TODO: Clean up this function, it's a mess and unclear why it is depending on featlin.
 def optimize_rr(
     X: np.ndarray,
     y: np.ndarray,
@@ -129,9 +128,6 @@ def optimize_rr(
 
     if alpha_lim is None:
         alpha_lim = [10e-5, 10e3]
-    # TODO: Whats that line for?
-    # if featlin is None:
-    #     featlin = []
 
     nb_iterations = 20
     nb_selected_values = 8
@@ -154,20 +150,17 @@ def optimize_rr(
                 nb_selected_values - 2,
             )
         alphas.append(alpha)
-        # Define the cross validation
+
         cv = KFold(n_splits=folds, shuffle=True, random_state=42)
-        # Define the model
         ridge = Ridge()
-        # Define the grid search
         grid = GridSearchCV(
             estimator=ridge,
             param_grid=dict(alpha=alpha),
             cv=cv,
             scoring="neg_mean_squared_error",
         )
-        # Fit the grid search
+
         grid.fit(X, y)
-        # Obtain all the results
         results = grid.cv_results_
         rmse.append(np.sqrt(-results["mean_test_score"]))
         stds.append(results["std_test_score"])
@@ -176,7 +169,6 @@ def optimize_rr(
         idx = np.argpartition(-results["mean_test_score"], 2)
 
         alpha_lim_cv = [results["param_alpha"][idx[0]], results["param_alpha"][idx[1]]]
-        # Sort the two alpha values
         alpha_lim_cv.sort()
 
         # If the two alpha values are close enough, stop the search
@@ -211,15 +203,12 @@ def optimize_rr(
     idx = [i for i, element in enumerate(rmse_cv) if element == rmse_std_min][0]
     alpha_std_opt_cv = alphas_cv[idx]
 
-    # Train the model with the optimal alpha value
     ridge = Ridge(alpha=alpha_opt_cv)
     ridge.fit(X, y)
-    # Obtain the coefficients
     coef_cv = ridge.coef_
-    # Train the model with the optimal std alpha value
+
     ridge = Ridge(alpha=alpha_std_opt_cv)
     ridge.fit(X, y)
-    # Obtain the coefficients
     coef_std_cv = ridge.coef_
 
     cv_res_dict = {
@@ -255,16 +244,8 @@ def optimize_rr(
             for j, a in enumerate(alphas_):
                 ridge = Ridge(alpha=a)
                 ridge.fit(X, y)
-                # y_hat = ridge.predict(X)
                 diff_vec = featlin - ridge.coef_.reshape(-1)
                 dist_l2_ = np.linalg.norm(diff_vec, ord=2)
-                # if min_dist_alpha is None:
-                #    min_dist_alpha = a
-                #    min_dist = dist_l2_
-                # else:
-                #    if dist_l2_ < min_dist:
-                #        min_dist_alpha = a
-                #        min_dist = dist_l2_
                 dist_l2_iteration_i.append(dist_l2_)
             # Define the new grid
             # Sort the dist_l2s of the last iteration
@@ -294,10 +275,9 @@ def optimize_rr(
         all_dist = np.concatenate(dist_l2, axis=0)
         l2_min_loc = np.argmin(all_dist)
         alpha_min_l2 = all_alphas[l2_min_loc]
-        # Train the model with the min dist alpha value
+
         ridge = Ridge(alpha=alpha_min_l2)
         ridge.fit(X, y)
-        # Obtain the coefficients
         coef_min_dist = ridge.coef_
 
         dist_l2_res_dict = {
@@ -429,7 +409,7 @@ def optimise_pls_cv(
         "rmse_vals": rmse,
         "components": components,
         "rmse_std_min": rmse_std_min,
-        "l2_distance": np.ndarray(l2_distance),
+        "l2_distance": np.array(l2_distance),
     }
     return res_dict
 

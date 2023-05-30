@@ -2,8 +2,10 @@
 # https://github.com/lawrennd/mlai/
 # based on commit: bb4b776a21ec17001bf20ee6406324217f902944
 # expand it to the different basis funcitons in the source.
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
+import matplotlib.pyplot as plt  # type: ignore
 from abc import ABC, abstractmethod
 from typing import Callable
 
@@ -14,34 +16,31 @@ class BasisDataConstructor:
         basis_function: BasisFunction,
         basis_weights: np.ndarray,
         targetfun: Callable[[np.ndarray], float],
+        x: np.ndarray,
         per_range: list = None,
         **kwargs,
     ):
         self.basis_function = basis_function
+        self.x = x
         self.kwargs = kwargs
         self.construct_X_data(basis_weights)
         self.construct_y_data(targetfun, per_range)
 
     def construct_X_data(self, basis_weights: np.ndarray) -> None:
-        """Constructs a data matrix based on
-        Parameters
-        ----------
-        basis_weights: ndarray
-            2D array of rows equal to desired observations in the data matrix, cols equal num_basis
-        """
-        if self.number != basis_weights.shape[1]:
+        if self.basis_function.num_basis != basis_weights.shape[1]:
             raise ValueError(
                 "Number of basis weights per observation must equal the number defined for this object!"
             )
-        self.X = np.zeros((basis_weights.shape[0], self.Phi_vals.shape[0]))
+        phi_vals = self.basis_function(self.x)
+        self.X = np.zeros((basis_weights.shape[0], phi_vals.shape[0]))
         for i in range(basis_weights.shape[0]):
             # Iterate through the rows.
-            self.X[i, :] = np.dot(self.Phi_vals, basis_weights[i, :].T)
+            self.X[i, :] = np.dot(phi_vals, basis_weights[i, :].T)
 
     def construct_y_data(
         self, targetfun: Callable[[np.ndarray], float], per_range: list = None
     ) -> None:
-        """Construct responsese
+        """Construct responsese, y. It is necessary to run construct_X_data first.
 
         Parameters
         ----------
@@ -130,7 +129,6 @@ class FourierBasis(BasisFunction):
 
     def __call__(self, x: np.ndarray) -> np.ndarray:
         tau = 2 * np.pi
-        # span = float(data_limits[1] - data_limits[0])
         Phi = np.ones((x.shape[0], self.num_basis))
         for i in range(1, self.num_basis):
             if i % 2:
@@ -138,3 +136,59 @@ class FourierBasis(BasisFunction):
             else:
                 Phi[:, i : i + 1] = np.cos((i + 1) * tau * np.asarray(x, dtype=float))
         return Phi
+
+
+def construct_data(
+    basis_function: BasisFunction,
+    target_function: Callable[[np.ndarray], float],
+    mean_params: np.ndarray,
+    stdv_params: np.ndarray,
+    num_datapoints: int = 50,
+    draws: int = 10,
+    plot_results: bool = False,
+) -> BasisDataConstructor:
+    """Build an object of the basis class based on the passed parameters and return the basis object.
+
+    Parameters
+    ----------
+    basis_function : callable (basis.function)
+        Basis function defined in basis.py that it used for generating the data.
+    target_function : callable
+        Underlying relationship between X and y. This can be any function from R^n -> R^1
+    mean_params : ndarray of shape (n_params for basis function)
+        Array of means of random paramters that are used by the basis functions.
+        The random parameters are drawn from normal distribution.
+    stdv_params : ndarray of shape (n_params for basis function)
+        Array of standarddeviations of random paramters that are used by the basis functions.
+    num_datapoints : int, default=50
+        Number of linearly spaced datapoints that will range from x_min to x_max
+    draws : int, default=10
+        Number of draws from basis functions.
+    plot_results : bool, default=False
+        If True, plot the data matrix.
+        IF False, do not plot.
+
+    Returns
+    -------
+    obj : BasisDataConstructor
+        Object of the class BasisDataConstructor that contains the data matrix X and the target vector y.
+    """
+    x_min = basis_function.data_limits[0]
+    x_max = basis_function.data_limits[1]
+    x = np.linspace(x_min, x_max, num_datapoints)[:, None]
+
+    # Draw the parameters for the matrix from a multidimensional normal distribution
+    param_vals = np.zeros((draws, len(mean_params)))
+    for i, (j, k) in enumerate(zip(mean_params, stdv_params)):
+        param_vals[:, i] = np.array(
+            [np.random.normal(loc=j, scale=k) for _ in range(draws)]
+        )
+
+    obj = BasisDataConstructor(basis_function, param_vals, target_function, x)
+
+    if plot_results:
+        plt.plot(x, obj.X.T)
+        plt.title("Data Generated from Basis Function")
+        plt.show()
+
+    return obj

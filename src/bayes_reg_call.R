@@ -1,3 +1,4 @@
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 # Interface to bayesreg can be called from a python script.
 # It will take the data as input and return the output of the bayesreg model.
 source("src/bayes_reg_local_code.R")

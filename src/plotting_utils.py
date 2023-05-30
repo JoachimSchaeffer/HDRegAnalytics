@@ -1,3 +1,4 @@
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 import numpy as np
 import pandas as pd  # type: ignore
 import seaborn as sns  # type: ignore
@@ -29,8 +30,6 @@ def plot_x_tt2(
     zorder: int = 1,
     **kwargs,
 ) -> plt.axes:
-    """Plot Data"""
-    # Get linestyle kwarg if it exists
     if "linestyle" in kwargs:
         linestyle = kwargs["linestyle"]
     else:
@@ -95,7 +94,6 @@ def plot_corrheatmap(
     ax.set_title(title)
     ax.set_xlabel(label)
     ax.set_ylabel(label)
-    # axs[0, 1].set_xticks(np.range(0, len(X_corr)), labels=range(2011, 2019))
     return ax
 
 
@@ -139,10 +137,8 @@ def optimize_cv(
         alpha_lim = [10e-5, 10e3]
 
     if std:
-        # Fit standard scaler
         scaler = StandardScaler()
         scaler.fit(X)
-        # Transform
         X = scaler.transform(X)
         if stdv is None:
             # stdv is the stnadard deviation of the data
@@ -176,7 +172,6 @@ def optimize_cv(
             **kwargs,
         )
 
-    # If kwarg plot is TRUE, plot the results
     if kwargs.get("plot", False):
         key = "components" if algorithm == "PLS" else "alphas"
         plot_cv_results(res_dict, key=key)
@@ -204,7 +199,7 @@ def plot_cv_results(res_dict: dict, key: str = "components") -> None:
         res_dict["cv_res"]["rmse_vals"] - res_dict["cv_res"]["rmse_std"],
         color="k",
     )
-    # Scatter a circle around the minimum
+
     ax[0].scatter(
         res_dict["cv_res"]["rmse_min_param"],
         np.min(res_dict["cv_res"]["rmse_vals"]),
@@ -212,6 +207,7 @@ def plot_cv_results(res_dict: dict, key: str = "components") -> None:
         s=100,
         label="RMSE Min",
     )
+
     # Scatter a circle around the mean rmse that is still within 1 std of the minimum
     ax[0].scatter(
         res_dict["cv_res"]["rmse_std_min_param"],
@@ -232,7 +228,7 @@ def plot_cv_results(res_dict: dict, key: str = "components") -> None:
         color=colors_IBM[0],
         label="L2 Distance",
     )
-    # Scatter a circle around the minimum
+
     min_l2_alpha = res_dict["l2_distance_res"]["l2_min_param"]
     min_l2_dist = np.min(res_dict["l2_distance_res"]["l2_distance"])
     ax[1].scatter(
@@ -247,7 +243,6 @@ def plot_cv_results(res_dict: dict, key: str = "components") -> None:
     ax[1].set_title(f"L2 Distance vs. Number of {key}")
     ax[1].legend()
 
-    # Set axes log scale if the key is alpha
     if key == "alphas":
         ax[0].set_xscale("log")
         ax[1].set_xscale("log")
@@ -261,7 +256,7 @@ def truncate_colormap(
     cmap: matplotlib.cm, minval: float = 0.0, maxval: float = 1.0, n: int = 100
 ) -> matplotlib.cm:
     """Truncates a colormap. This is important because a) many people are partly colorblind and a lot of
-    colormaps unsuited for them, and b) a lot of colormaps include yellow whichcanbe hard to see on some
+    colormaps unsuited for them, and b) a lot of colormaps include yellow which can be hard to see on some
     screens and bad quality prints.
     from https://stackoverflow.com/questions/18926031/how-to-extract-a-subset-of-a-colormap-as-a-new-colormap-in-matplotlib
 
@@ -306,27 +301,19 @@ def format_label(max_gamma: float, con_val: float = -9999, method: str = "") -> 
     label : str
         Formatted label
     """
-    # if max_gamma < 0.01:
-    #     g_str = f"{max_gamma:.3f}"
-    # else:
-    #     g_str = f"{max_gamma:.2f}"
 
-    # The gamma value will highly depend on the magnitude of the differenc eof the features/regression coefficients
+    # Gamma highly depends on the magnitude of the difference of the features/regression coefficients
     # Thus it is very difficult to interpret.
     if method == "NRMSE":
         if con_val <= 10 ** (-12):
             label = r"$\in\mathcal{\mathbf{N}}(\mathbf{X})$"
-
-        # if con_val >= 0.001:
-        #    label=r'$\in \mathcal{\mathbf{\widetilde{N}}}(X)$, $\gamma\approx$' + f'{max_gamma:.3f}, \n' + r'$\Delta_{NRMSE}\approx$' + f'{con_val:.3f}%'
-        # else:
-        #    label=r'$\in \mathcal{\mathbf{\widetilde{N}}}(X)$, $\gamma\approx$' + f'{max_gamma:.1e}, \n' + r'$\Delta_{NRMSE}\approx$' + f'{con_val:.1e}%'
-        label = (
-            r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
-            + f"{dec_sci_switch(max_gamma, decimal_switch=1, sci_acc=1)}, "
-            + r"$\Delta_{NRMSE}\approx$"
-            + f"{con_val:.1f}%"
-        )
+        else:
+            label = (
+                r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
+                + f"{dec_sci_switch(max_gamma, decimal_switch=1, sci_acc=1)}, "
+                + r"$\Delta_{NRMSE}\approx$"
+                + f"{con_val:.1f}%"
+            )
     elif method == "Xv":
         label = (
             r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
@@ -348,6 +335,7 @@ def dec_sci_switch(number: float, decimal_switch: int = 3, sci_acc: int = 2) -> 
         return f"{number:.{decimal_switch}f}"
 
 
+# TODO: Clean up this function
 def plot_nullspace_correction(
     w_alpha: np.ndarray,
     w_beta: np.ndarray,
@@ -417,15 +405,6 @@ def plot_nullspace_correction(
     nrmse_max = np.max(nrmse_vals)
     cNorm = mcolors.Normalize(vmin=nrmse_min, vmax=nrmse_max)
 
-    # Outdated
-    # For synthethic data nrmse_min approx equal nrmse_max and numeric precision might lead to nrmse_min > nrmse_max
-    # eps = 10**(-12)
-    # if np.abs(nrmse_min-nrmse_max) > eps:
-    #     cNorm  = mcolors.Normalize(vmin=nrmse_min, vmax=nrmse_max)
-    # else:
-    #     cNorm  = mcolors.Normalize(vmin=nrmse_min-eps, vmax=nrmse_max+eps)
-    # cNorm  = mcolors.Normalize(vmin=0, vmax=np.log(gs.max()))
-
     cmap = truncate_colormap(cm.get_cmap("plasma"), 0.1, 0.7)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
 
@@ -482,12 +461,6 @@ def plot_nullspace_correction(
         x, w_beta, label=coef_beta_label, color="k", linewidth=2.5, zorder=v.shape[0] + 1
     )
 
-    # ax[1].fill_between(x.reshape(-1), w_alpha, y2=w_alpha+v[-1,:], hatch='oo', zorder=-1, fc=(1, 1, 1, 0.8), label=r'Appr. contained in $N(X)$')
-    # if max_gamma < 0.01:
-    #     g_str = f"{max_gamma:.3f}"
-    # else:
-    #     g_str = f"{max_gamma:.2f}"
-
     label = format_label(max_gamma, con_val=con_val, method=method)
 
     ax[1].fill_between(
@@ -514,9 +487,6 @@ def plot_nullspace_correction(
     ax[1].set_title("Nullspace Perspective")
 
     cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
-
-    # cb.set_label(r'$\ln(\gamma)$', labelpad=10)
-    # cb.set_label(r'NRMSE($\mathbf{X}\boldsymbol{\beta}_{a+v(\gamma)}, \mathbf{X}\boldsymbol{\beta}_a$)', labelpad=10)
     cb.set_label(r"NRMSE (%)", labelpad=10)
 
     ax[0].grid()
@@ -595,8 +565,7 @@ def scatter_predictions(
     ax.set_xlabel(r"$y-\bar{y}$")
     ax.set_ylabel(r"$\hat y-\bar{y}$")
     ax.set_title(title)
-    # Show legend, without frame and fontsize 3 pts smaller than the default
-    # Get the default legend fontsize
+
     legend_fontsize = matplotlib.rcParams["legend.fontsize"]
     ax.legend(frameon=False, fontsize=legend_fontsize - 4)
 

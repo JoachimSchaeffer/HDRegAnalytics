@@ -1,8 +1,4 @@
-"""
-Featue Linearization Methodology
-Fuctions to linearize nonlinear features and
-Subsequently finding a constant term via regeression to match the metdoch
-"""
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 
 import numpy as np
 import pandas as pd
@@ -18,7 +14,7 @@ from sklearn.metrics import mean_squared_error
 
 import copy
 
-from src.basis import BasicsData
+from hd_data import HD_Data
 from src.nullspace import Nullspace
 from src.nullspace import format_label, nrmse
 
@@ -56,7 +52,7 @@ class Featlin:
         else:
             if x is None:
                 x = np.linspace(0, X.shape[1] - 1, X.shape[1])
-            self.data = BasicsData(X=X, x=x, y=y)
+            self.data = HD_Data(X=X, x=x, y=y)
 
         if feat_funcs is None:
             feat_fun = [

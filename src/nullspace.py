@@ -1,3 +1,4 @@
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
 from numpy import linalg as LA
@@ -6,11 +7,9 @@ from sklearn.metrics import mean_squared_error  # type: ignore
 import matplotlib.pylab as plt  # type: ignore
 from plotting_utils import plot_nullspace_correction
 from plotting_utils import scatter_predictions as scatter_predictions_helper
-from basis import BasicsData
+from hd_data import HD_Data
 from typing import Union
 from typing import Protocol
-
-# from typing_extensions import Protocol  # for Python <3.8
 
 
 # source: https://stackoverflow.com/questions/54868698/what-type-is-a-sklearn-model
@@ -30,31 +29,20 @@ class ScikitModel(Protocol):
 
 class Nullspace:
     """Methods to calulate the nullspace correction
-    The nullspace correction is calculated between the two models w_alpha and w_beta.
-    A certain NRMSE of the prediction of the model is allowed in the nullspace correction.
+    The nullspace correction is applied to compare the two regression coefficients w_alpha and w_beta.
     """
 
     def __init__(self, data, **kwargs):
-        # Dictionary to store weights learned from mean subtracted data X_
         self.weights: dict = {}
         self.nullsp: dict = {}
-        self.data: BasicsData = data  # Should be a BasicsCalss object or duck type
+        self.data: HD_Data = data
         self.con_thres: float = None
         self.con_val: float = None
         self.opt_gamma_method: str = None
         self.max_gamma: float = None
 
     def learn_weights(self, models: list[ScikitModel], string_id: str) -> Nullspace:
-        """Learn weights from data and sotre them in the dictionary.
-
-        Parameters
-        ----------
-        model : object
-            sklearn model object with methods fit(), predict() (e.g. sklearn)
-            for custom models you might want to write a wrapper
-        string_id : str
-            model description string
-        """
+        """Learn weights from data and sotre them in the dictionary."""
         for i, model in enumerate(models):
             reg = model.fit(self.data.X_, self.data.y_)
             coef = reg.coef_.reshape(-1)
@@ -73,6 +61,7 @@ class Nullspace:
                 ] = "Undefined Std = 0 ofr some column"
         return self
 
+    # TODO: Break this function up into smaller functions. It is too long and does too many things.
     def nullspace_correction(
         self,
         w_alpha: np.ndarray = None,
@@ -170,7 +159,6 @@ class Nullspace:
             key_alpha = "w_alpha"
             key_beta = "w_beta"
 
-        # x = self.data.x
         self.nullsp["info"] = ""
 
         self.opt_gamma_method = opt_gamma_method
@@ -258,8 +246,7 @@ class Nullspace:
         multi_gammas: bool = False,
     ) -> None:
         """Optimize the gamma parameter for the nullspace correction.
-        This is a simple (but ineffective way) way of optimizing which should suffice for this issue.
-
+        This is a simple (but ineffective way) way of optimizing and can be imporved.
         """
 
         depth = 20
@@ -269,14 +256,11 @@ class Nullspace:
         if gammas_.ndim == 0:
             gammas_ = gammas_.reshape(1)
 
-        # TODO: Have another look at this optimization!
         for i in range(depth):
-            # print('Iteration: ', i)
             for j, gamma in enumerate(gammas_):
                 con_val, _ = self.eval_constraint(
                     X, y_, key_alpha, key_beta, gamma, method=self.opt_gamma_method
                 )
-                # cons, _ = self.eval_constraint(X, y_, key_alpha, key_beta, gamma, method='NRMSE')
                 cons_list.append(con_val)
                 if con_val >= eps + self.con_thres:
                     break
@@ -348,10 +332,7 @@ class Nullspace:
         gamma: float,
         method: str = "NRMSE",
     ) -> tuple[float, float]:
-        # print(f'Gamma: {gamma}')
-        # n = self.data.X.shape[0]
         v_, _, _ = self.nullspace_calc(key_alpha, key_beta, X, gs=np.array(gamma))
-        # val = mean_squared_error(y_, X@(v_.reshape(-1)), squared=False)
         if method == "MSE":
             mse_reg = mean_squared_error(y_, X @ (self.nullsp[key_alpha]), squared=False)
             mse_nulls = mean_squared_error(
@@ -377,7 +358,6 @@ class Nullspace:
             val = np.abs(nrmse_reg - nrmse_nulls) + 100 * np.sqrt(
                 X.shape[1]
             ) * np.average(X @ v_.reshape(-1) ** 2) / (np.max(y_) - np.min(y_))
-            # print(f'Delta MSE of gamma: {val}')
 
             # TODO: Flag conxy, "Xv" method
             con_xv = -1
@@ -398,7 +378,6 @@ class Nullspace:
                 X.shape[1]
             ) * np.average(X @ v_.reshape(-1) ** 2) / (np.max(y_) - np.min(y_))
 
-            # pred_lin = X @ (self.nullsp[key_beta])
             pred_model = X @ (self.nullsp[key_alpha])
             con_xv = (
                 100
@@ -408,7 +387,6 @@ class Nullspace:
             # con_xv = np.sqrt(1000)*np.sum((X@v_.reshape(-1))**2)/(np.max(pred_model)-np.min(pred_model))
             # print(val)
         elif method == "Xv":
-            # pred_lin = X @ (self.nullsp[key_beta])
             pred_model = X @ (self.nullsp[key_alpha])
             val = (
                 100
@@ -436,15 +414,11 @@ class Nullspace:
         X : ndarray
             2D Data matrix that was used for estimating the regression coefficeint
             Predictions can be made via np.dot(X, w_alpha) or X@w_alpha
-        x : ndarray
-            1D array of values of the smooth domain
         gs : ndarray, default=None
             1D array of penalizations of deviations form the nulspace vector
 
         Returns
         ----------
-        v : ndarray
-            1D array of of regression coefficeint contianed in teh nullspace that minimize the L2-norm
         v_ : ndarray
             2D array length(gs) times length w_alpha
             Regression coefficeints minimizing L2 norm but deviations from the nullsapce according gs are allowed
@@ -458,16 +432,17 @@ class Nullspace:
         w_beta = self.nullsp[key_beta]
         if gs is None:
             gs = np.geomspace(10 ** (-5), (10**4) * (np.max(X) - np.min(X)), 30)
-        # difference between coefficients
+        # Difference between coefficients
+        # TODO: Consider working only with the w. Essentially we are interested in testing the hypothesis
+        # that w is close to the nullspace and thus insignificant or whether it is significatn in which case
+        # the nullhypothesis that the difference of the regression coefficients is insignificant must be rejected.
         w = w_alpha - w_beta
 
         # Build helper vectors and matrices, not optimized for speed or memory usage!
         shape = X.shape
         I_ = np.identity(shape[1])
 
-        # Do the magic:
         nb_gs = gs.size
-        # if gs has 0 dim, add a dimension
         if gs.ndim == 0:
             gs = gs.reshape(1)
         v_ = np.zeros((nb_gs, shape[1]))
@@ -507,23 +482,6 @@ class Nullspace:
     def plot_nullspace_correction(
         self, std: bool = False, title: str = ""
     ) -> tuple[plt.figure, plt.axes]:
-        """Method that calls plot_nullspace_correction, uses basis object.
-
-        Parameters
-        ----------
-        title : str
-            Suptitle of the resulting figure
-        std : bool, default=False
-            Indicate whether Standardization(Z-Scoring) shall be performed.
-            If yes, use X_std of the data_ml_object, if not use X.
-
-        Returns
-        -------
-        fig : object
-            matplotlib figure object
-        ax : object
-            matplotlib axis objects
-        """
         if std:
             X = self.data.X_std
             w_alpha = self.nullsp["w_alpha_std"]
@@ -576,42 +534,3 @@ class Nullspace:
         ]
 
         return scatter_predictions_helper(X, y_, w, labels, ax=ax, return_fig=return_fig)
-
-
-# TODO: Theres something wrong with this function. Should be dubugged if used or deleted.
-if 0:
-
-    def nullspace_correction_wrap(w_alpha, w_beta, dml_obj, verbose=True, std=False):
-        """Function that calls 'nullspace_correction allowing to shorten syntax and use SynMLData class.
-
-        Parameters
-        ----------
-        w_alpha : ndarray
-            Regression coefficients obtained with method alpha
-        w_beta : ndarray
-            Regression coefficients obtained with method beta
-        dml_obj : obj
-            Object from SynMLData class
-        std : bool, default=False
-            Indicate whether Standardization(Z-Scoring) shall be performed.
-            If yes, use X_std of the dml_object, if not use X.
-
-        Returns
-        -------
-        see 'nullspace_correction'
-        """
-        if std:
-            X = dml_obj.X_std
-        else:
-            X = dml_obj.X_
-        x = dml_obj.x
-
-        y_ = dml_obj.y_
-        y_range = np.max(y_) - np.min(y_)
-        min_exp = -5
-        max_exp = np.floor(np.log10(int((10**2) * y_range)))
-        gs = np.logspace(min_exp, max_exp, 30)
-        gs = np.append(gs, [int((10**2) * y_range)])
-        return Nullspace.nullspace_correction(
-            w_alpha, w_beta, X, x, gs=gs, comp_block=0, verbose=verbose
-        )

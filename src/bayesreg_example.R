@@ -1,3 +1,4 @@
+# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 library(MASS)
 library(bayesreg)
 

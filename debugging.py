@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error
 import jax.numpy as jnp
 from src.featlin import Featlin
 from src.featlin import jax_moment
-from src.basis import BasicsData
+from hd_data import BasicsData
 
 # Initialize the random seed to ensure reproducibility of the results in the paper
 random.seed(10)
