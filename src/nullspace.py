@@ -5,7 +5,7 @@ from numpy import linalg as LA
 from scipy import linalg  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 import matplotlib.pylab as plt  # type: ignore
-from plotting_utils import plot_nullspace_correction
+from plotting_utils import plot_nullspace_analysis
 from plotting_utils import scatter_predictions as scatter_predictions_helper
 from hd_data import HD_Data
 from typing import Union
@@ -61,8 +61,7 @@ class Nullspace:
                 ] = "Undefined Std = 0 ofr some column"
         return self
 
-    # TODO: Break this function up into smaller functions. It is too long and does too many things.
-    def nullspace_correction(
+    def nullspace_analysis(
         self,
         w_alpha: np.ndarray = None,
         w_alpha_name: np.ndarray = None,
@@ -77,6 +76,7 @@ class Nullspace:
         con_thres: float = 0.5,
         opt_gamma_method: str = "Xv",
         gammas_inital: np.ndarray = np.geomspace(10**11, 10 ** (-5), 10),
+        analyse_objective_trajectory: bool = False,
         **kwargs,
     ) -> Union[Nullspace, tuple[Nullspace, plt.figure, plt.axes]]:
         """Function that calls 'nullspace_calc allowing to shorten syntax.
@@ -183,41 +183,10 @@ class Nullspace:
             # mse_beta = mean_squared_error(y_, X@(self.nullsp[key_beta]), squared=False)
             # self.con_thres = np.abs(self.con_thres) * np.abs(mse_alpha-mse_beta)
 
-        # Activate for debugging purposes/get more insights into how the constraints work.
-        if 1:
-            # Run a loop over different values of gamma to see how the proposer NRMSE metric would change.
-            gamma_vals = np.logspace(5, -5, 80)
-            (
-                self.nullsp["v_"],
-                self.nullsp["norm_"],
-                self.nullsp["gamma"],
-            ) = self.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
-            nrmse_list = []
-            xv = []
-            for gamma in gamma_vals:
-                # Evaluate the NRMSE metric
-                cons, con_xv = self.eval_constraint(
-                    X, y_, key_alpha, key_beta, gamma=gamma, method="NRMSE_Xv"
-                )
-                nrmse_list.append(cons)
-                xv.append(con_xv)
-
-            # MAke a plot with two y-axis to show the NRMSE and the Xv metric
-            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-            ax.plot(gamma_vals, nrmse_list, label=r"$\Delta$ NRMSE")
-            ax.set_xlabel(r"$\gamma$")
-            ax.set_ylabel(r"$\Delta$ NRMSE")
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax2 = ax.twinx()
-            ax2.plot(gamma_vals, xv, label=r"$\tilde{n}$", color="red")
-            ax2.set_ylabel(r"$\tilde{n}$")
-            ax2.set_xscale("log")
-            ax2.set_yscale("log")
-            ax.legend(loc="lower left")
-            ax2.legend(loc="upper right")
-            plt.savefig("NRMSE_Xv.pdf")
-            plt.show()
+        if analyse_objective_trajectory:
+            self.objective_function_trajectory(
+                X=X, key_alpha=key_alpha, key_beta=key_beta
+            )
 
         self.optimize_gamma(
             X=X,
@@ -229,12 +198,57 @@ class Nullspace:
         )
 
         if plot_results:
-            fig, ax = self.plot_nullspace_correction(std=std)
+            fig, ax = self.plot_nullspace_analysis(std=std)
             if save_plot:
                 fig.savefig(path_save + file_name)
             return self, fig, ax
         else:
             return self
+
+    def objective_function_trajectory(
+        self,
+        *,
+        X: np.ndarray,
+        key_alpha: str,
+        key_beta: str,
+        gamma_vals: np.ndarray = None,
+    ):
+        """Try an array of gamma values to see how the proposed NRMSE objective changes."""
+        if gamma_vals is None:
+            gamma_vals = np.logspace(5, -5, 80)
+
+        (
+            self.nullsp["v_"],
+            self.nullsp["norm_"],
+            self.nullsp["gamma"],
+        ) = self.nullspace_calc(key_alpha, key_beta, X, gs=gamma_vals)
+
+        nrmse_list = []
+        xv = []
+        for gamma in gamma_vals:
+            # Evaluate the NRMSE metric
+            cons, con_xv = self.eval_constraint(
+                X, self.data.y_, key_alpha, key_beta, gamma=gamma, method="NRMSE_Xv"
+            )
+            nrmse_list.append(cons)
+            xv.append(con_xv)
+
+        # MAke a plot with two y-axis to show the NRMSE and the Xv metric
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        ax.plot(gamma_vals, nrmse_list, label=r"$\Delta$ NRMSE")
+        ax.set_xlabel(r"$\gamma$")
+        ax.set_ylabel(r"$\Delta$ NRMSE")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax2 = ax.twinx()
+        ax2.plot(gamma_vals, xv, label=r"$\tilde{n}$", color="red")
+        ax2.set_ylabel(r"$\tilde{n}$")
+        ax2.set_xscale("log")
+        ax2.set_yscale("log")
+        ax.legend(loc="lower left")
+        ax2.legend(loc="upper right")
+        fig.savefig("NRMSE_Xv.pdf")
+        fig.show()
 
     def optimize_gamma(
         self,
@@ -283,6 +297,8 @@ class Nullspace:
         self.max_gamma = gamma
         self.con_val = con_val
 
+        # TODO: Check Scipy optimize for the new implementation and then clean up all code thats not needed.
+
         # print(f'Gamma value corresponding to nrmse={np.abs(self.max_nrmse):.1e} % is {self.max_gamma:.3f}')
         # Print constraint con_xy value
         # print(f'Constraint value: {con_xv:.3f}')
@@ -302,7 +318,7 @@ class Nullspace:
         #     method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
         # self.max_gamma = gamma_upper_limit.x[0]
 
-        if multi_gammas & (type(self.max_gamma) == float):
+        if multi_gammas & (type(self.max_gamma) in [np.float64, float, np.float32]):
             gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
         else:
             gamma_vals = np.array(self.max_gamma).reshape(1)
@@ -479,7 +495,7 @@ class Nullspace:
 
         return v_, norm_, gs
 
-    def plot_nullspace_correction(
+    def plot_nullspace_analysis(
         self, std: bool = False, title: str = ""
     ) -> tuple[plt.figure, plt.axes]:
         if std:
@@ -490,7 +506,7 @@ class Nullspace:
             X = self.data.X_
             w_alpha = self.nullsp["w_alpha"]
             w_beta = self.nullsp["w_beta"]
-        fig, ax = plot_nullspace_correction(
+        fig, ax = plot_nullspace_analysis(
             w_alpha,
             w_beta,
             self.nullsp["v_"],

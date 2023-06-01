@@ -378,7 +378,7 @@ class Featlin:
             nulls_ = Nullspace(self.data)
             # For the nullspace correction we apply std false in all cases,
             # becasue we work woth retransformed regression coefficeints.
-            nulls_ = nulls_.nullspace_correction(
+            nulls_ = nulls_.nullspace_analysis(
                 w_alpha=reg_coef_nullsp,
                 w_alpha_name=model_names[i],
                 w_beta=lin_coef_nullsp,

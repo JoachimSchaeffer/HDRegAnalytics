@@ -113,26 +113,7 @@ def optimize_cv(
     verbose: bool = False,
     **kwargs,
 ) -> dict:
-    """Crossvalidation or optimization of regression coefficient distance for PLS or RR
-
-    Parameters
-    ----------
-    X : ndarray
-        2D array of training data
-    y : ndarray
-        1D array of responses
-    max_comps : int, default=20
-        maximum number of PLS components for cv
-    folds : int, default=10
-        number of folds for crossvalidation
-    nb_stds : int, default=1
-        Choose highest regularization, where rms is still < rmse[rmsemin_loc]+nb_stds*stds[rmsemin_loc]
-    plot_components : bool, default=False
-        Indicate whether to plot results
-    std : bool, default=False
-        Inidcates whether to standardize/z-score X
-
-    """
+    """Crossvalidation or optimization of regression coefficient distance for PLS or RR"""
     if alpha_lim is None:
         alpha_lim = [10e-5, 10e3]
 
@@ -141,8 +122,6 @@ def optimize_cv(
         scaler.fit(X)
         X = scaler.transform(X)
         if stdv is None:
-            # stdv is the stnadard deviation of the data
-            # from the standard scaler
             stdv = scaler.scale_
 
     if algorithm == "PLS":
@@ -312,7 +291,7 @@ def format_label(max_gamma: float, con_val: float = -9999, method: str = "") -> 
                 r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
                 + f"{dec_sci_switch(max_gamma, decimal_switch=1, sci_acc=1)}, "
                 + r"$\Delta_{NRMSE}\approx$"
-                + f"{con_val:.1f}%"
+                + f"{con_val:.2f}%"
             )
     elif method == "Xv":
         label = (
@@ -335,8 +314,7 @@ def dec_sci_switch(number: float, decimal_switch: int = 3, sci_acc: int = 2) -> 
         return f"{number:.{decimal_switch}f}"
 
 
-# TODO: Clean up this function
-def plot_nullspace_correction(
+def plot_nullspace_analysis(
     w_alpha: np.ndarray,
     w_beta: np.ndarray,
     v: np.ndarray,
@@ -352,44 +330,7 @@ def plot_nullspace_correction(
     con_val: float = -9999,
     method: str = "",
 ) -> Union[tuple[plt.figure, plt.axes], None]:
-    """Plot the nullspace correction
-
-    Parameters
-    ----------
-    w_alpha : ndarray
-        1D array of linear feature coefficient vector
-    w_beta : ndarray
-        1D array of regression coefficients
-    v : ndarray
-        1D array of of regression coefficeint contianed in the nullspace that minimize the L2-norm
-    gs : ndarray
-        1D array of penalizations of deviations form the nulspace vector
-        Either equal to inpiuts or derived in the function
-    X : ndarray
-        2D Data matrix that was used for estimating the regression coefficeint
-        Predictions can be made via np.dot(X, w_alpha) or X@w_alpha
-    x : ndarray
-        1D array of values of the smooth domain
-    name : str, default=''
-        Name of the Plot, suptitle of the Matplotlib function
-    coef_name_alpha : str, defualt=''
-        Description/label for coefficients alpha
-    coef_name_beta : str, defailt=''
-        Description/label for coefficients beta
-    return_fig : bool, default=True
-        Indicatees whetehr function returns figure or not
-    max_nrmse : float, default=-9999
-        Maximum nrmse diff. that was allowed.
-    gamma : float, default=-9999
-        Gamma value correponding to maximum nrmse
-
-
-    Returns
-    -------
-    fig : object
-        matplotlib figure object
-    ax : object
-    """
+    """Plot the nullspace correction"""
     y = y - np.mean(y)
     X = X - np.mean(X, axis=0)
     color_list = ["#0051a2", "#97964a", "#f4777f", "#93003a"]
@@ -416,7 +357,7 @@ def plot_nullspace_correction(
     handles, labels = ax[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax[0].legend(by_label.values(), by_label.keys(), loc=2)
-    ax[0].set_ylabel("y values")
+    ax[0].set_ylabel("y")
 
     y_min = ax[0].get_ylim()[0]
     y_max = ax[0].get_ylim()[1]
@@ -473,7 +414,7 @@ def plot_nullspace_correction(
         label=label,
     )
 
-    ax[1].set_xlabel("x values")
+    ax[1].set_xlabel("x")
     ax[1].set_ylabel(r"Regression Coefficients $(\beta)$")
 
     # Set bottom and left spines as x and y axes of coordinate system
@@ -543,8 +484,9 @@ def scatter_predictions(
 ) -> Union[tuple[plt.figure, plt.axes], None]:
     """Method that scatter plots the predictions associated with different regression coefficients."""
 
-    colors = ["#000000", "#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000"]
+    colors = ["#000000", "#648fff", "#dc267f", "#785ef0", "#fe6100", "#ffb000"]
     # ['#332288', '#117733', '#44AA99', '#88CCEE', '#DDCC77', '#CC6677', '#AA4499', '#882255']
+    markers = ["<", "v", "^", "o"]
 
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(7, 7))
@@ -558,7 +500,7 @@ def scatter_predictions(
             y_,
             y_pred,
             label=f"{label}, NRMSE: {nrmse_:.2f}%",
-            marker="o",
+            marker=markers[i],
             color=colors[i],
         )
 
