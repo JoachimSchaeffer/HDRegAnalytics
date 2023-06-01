@@ -375,7 +375,7 @@ def plot_nullspace_analysis(
             x, w_alpha + v[i, :], color=scalarMap.to_rgba(100 * nrmse[i]), zorder=i
         )
 
-    markevery = int(len(x) / 15)
+    # markevery = int(len(x) / 15)
     nrmse_alpha = (
         100
         * mean_squared_error(y, X @ (w_alpha), squared=False)
@@ -392,9 +392,6 @@ def plot_nullspace_analysis(
         w_alpha,
         label=coef_alpha_label,
         color="darkgreen",
-        marker="P",
-        markevery=markevery,
-        markersize=8,
         linewidth=2.5,
         zorder=v.shape[0] + 1,
     )

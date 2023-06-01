@@ -40,31 +40,8 @@ class BasisDataConstructor:
     def construct_y_data(
         self, targetfun: Callable[[np.ndarray], float], per_range: list = None
     ) -> None:
-        """Construct responsese, y. It is necessary to run construct_X_data first.
-
-        Parameters
-        ----------
-        targetfun : callable
-            Underlying relationship between X and y. This can be any function from R^n -> R^1
-            This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology.
-        percentage_range_x_to_t : ndrray, default=[0,1]
-            1D array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1,
-            defines the range of input data that shall be used to generate the target function
-            The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y
-        """
-        if per_range is None:
-            per_range = [0, 1]
-
-        columns = self.X.shape[1]
-        low_ind = int(per_range[0] * columns)
-        high_ind = int(per_range[1] * columns)
-        # self.y = targetfun(self.X[:, low_ind:high_ind])
-
-        rows = self.X.shape[0]
-        self.y = np.zeros([rows])
-        for i in range(rows):
-            row_i = self.X[i, :]
-            self.y[i] = targetfun(row_i[low_ind:high_ind])
+        """Caller to construct responsese, y. It is necessary to run construct_X_data first"""
+        self.y = construct_y_data(self.X, targetfun, per_range)
 
 
 class BasisFunction(ABC):
@@ -192,3 +169,35 @@ def construct_data(
         plt.show()
 
     return obj
+
+
+def construct_y_data(
+    X: np.ndarray, targetfun: Callable[[np.ndarray], float], per_range: list = None
+) -> np.ndarray:
+    """Construct responsese, y. It is necessary to run construct_X_data first.
+
+    Parameters
+    ----------
+    targetfun : callable
+        Underlying relationship between X and y. This can be any function from R^n -> R^1
+        This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology.
+    percentage_range_x_to_t : ndrray, default=[0,1]
+        1D array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1,
+        defines the range of input data that shall be used to generate the target function
+        The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y
+    """
+    if per_range is None:
+        per_range = [0, 1]
+
+    columns = X.shape[1]
+    low_ind = int(per_range[0] * columns)
+    high_ind = int(per_range[1] * columns)
+    # self.y = targetfun(self.X[:, low_ind:high_ind])
+
+    rows = X.shape[0]
+    y = np.zeros([rows])
+    for i in range(rows):
+        row_i = X[i, :]
+        y[i] = targetfun(row_i[low_ind:high_ind])
+
+    return y
