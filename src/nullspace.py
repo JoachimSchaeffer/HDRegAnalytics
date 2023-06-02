@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numpy import linalg as LA
 from scipy import linalg  # type: ignore
+from scipy.optimize import minimize  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 import matplotlib.pylab as plt  # type: ignore
 import time
@@ -43,6 +44,7 @@ class Nullspace:
         self.max_gamma: float = None
         # Active data set
         self.X = self.data.X_
+        self.x = self.data.x
         self.y = self.data.y_
         self.std = False
 
@@ -129,7 +131,6 @@ class Nullspace:
         multi_gammas: bool = True,
         con_thres: float = 0.5,
         opt_gamma_method: str = "Xv",
-        gammas_inital: np.ndarray = np.geomspace(10**11, 10 ** (-5), 10),
         analyse_objective_trajectory: bool = True,
         plot_results: bool = False,
         save_plot: bool = False,
@@ -145,7 +146,7 @@ class Nullspace:
         if opt_gamma_method == "NRMSE" and self.con_thres < 0:
             nrmse_alpha = (
                 100
-                * mean_squared_error(self.y, self.data.X_ @ (self.w_alpha), squared=False)
+                * mean_squared_error(self.y, self.X @ (self.w_alpha), squared=False)
                 / range_y
             )
             nrmse_beta = (
@@ -156,10 +157,7 @@ class Nullspace:
             self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
             print("NRMSE constraint threshold: ", self.con_thres)
 
-        self.optimize_gamma(
-            gammas_inital=gammas_inital,
-            multi_gammas=multi_gammas,
-        )
+        self.optimize_gamma(multi_gammas=multi_gammas)
 
         if plot_results:
             fig, ax = self.plot_nullspace_analysis()
@@ -221,21 +219,50 @@ class Nullspace:
 
     def optimize_gamma(
         self,
-        gammas_inital: np.ndarray = np.geomspace(10**11, 10 ** (-5), 10),
         multi_gammas: bool = False,
-        *,
-        verbose: bool = True,
     ) -> None:
         """Optimize the gamma parameter for the nullspace correction."""
+        gamma, con_val = self.scipy_opt_gamma(verbose=False)
+        self.max_gamma = gamma
+        self.con_val = con_val
 
-        depth = 20
+        if multi_gammas & (type(self.max_gamma) in [np.float64, float, np.float32]):
+            gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
+        else:
+            gamma_vals = np.array(self.max_gamma).reshape(1)
+
+        (
+            self.nullsp["v_"],
+            self.nullsp["norm_"],
+            self.nullsp["gamma"],
+        ) = self.nullspace_calc(gs=gamma_vals)
+        cons_dict = self.eval_constraint(gamma_vals[-1], methods=self.opt_gamma_method)
+        con_val = cons_dict[self.opt_gamma_method]
+        print(f"Constraint value: {con_val:.12f}, Method {self.opt_gamma_method}")
+
+        if 0:
+            self.nullsp["v"] = np.array(
+                [self.nullsp[self.key_beta] - self.nullsp[self.key_alpha]]
+            )
+            self.nullsp["v_"] = np.array(
+                self.nullsp[self.key_beta] - [self.nullsp[self.key_alpha]]
+            )
+            self.nullsp["gamma"] = 0
+            self.max_gamma = np.inf
+
+    def naive_opt_gamma(
+        self,
+        gammas_inital: np.ndarray = np.geomspace(10**7, 10 ** (-7), 10),
+        verbose: bool = True,
+    ):
+        """This is a simple way of optimizing gamma, for experimentation purposes only."""
+        depth = 30
         eps = 10**-7
         cons_list = []
         gammas_ = gammas_inital
         if gammas_.ndim == 0:
             gammas_ = gammas_.reshape(1)
 
-        # This is a simple way of optimizing and can be improved.
         tick = time.time()
         for i in range(depth):
             for j, gamma in enumerate(gammas_):
@@ -261,64 +288,41 @@ class Nullspace:
                     gammas = np.geomspace(gammas[idx_high], gammas[idx_high + 1], 3)
                     gammas_ = np.array(gammas[1]).reshape(1)
         tock = time.time()
-        self.max_gamma = gamma
-        self.con_val = con_val
+
         if verbose:
             print(f"Optimization took {tock-tick:.2f} seconds")
             print(f"Optimization depth: {i}, max depth: {depth}")
             print(
-                f"Gamma value corresponding to {np.abs(self.con_thres):.1e} % is {self.max_gamma:.3e}"
+                f"Gamma value corresponding to {np.abs(self.con_thres):.1e} % is {gamma}"
             )
             print(f"Constraint value: {con_val:.3f}")
+        return gamma, con_val
 
-        # if 0:
-        # TODO: Check Scipy optimize for the new implementation and then clean up all code thats not needed.
+    def scipy_opt_gamma(self, verbose: bool = True) -> float:
+        tick = time.time()
 
-        # from scipy.optimize import minimize
+        def constraint(x):
+            con = self.eval_constraint(x, methods=[self.opt_gamma_method])[
+                self.opt_gamma_method
+            ]
+            return self.con_thres - con
 
-        # con = {"type": "eq", "fun": constraint}
-        # solution = minimize(
-        #     objective_gamma,
-        #     5000,
-        #     method="SLSQP",
-        #     bounds=[(1, 10**10)],
-        #     constraints=con,
-        # )
-        # print(solution.x[0])
-        # print(f'Contraint {constraint(solution.x[0])}')
-        # self.max_gamma = solution.x[0]
-        # y_range = np.max(y_) - np.min(y_)
-        # gs_inital = 100*y_range
-        # Find value for gamma that
-        # import scipy as sp
-        # gamma_upper_limit = sp.optimize.minimize(
-        #     find_gamma_, 100, args=(self.nullsp[key_alpha], self.nullsp[key_beta], X, x, y_, max_nrmse),
-        #     method='Nelder-Mead', bounds=[(1, 10**10)], options={'xatol' : 0.01})
-        # self.max_gamma = gamma_upper_limit.x[0]
+        def objective_gamma(x):
+            return x
 
-        if multi_gammas & (type(self.max_gamma) in [np.float64, float, np.float32]):
-            gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
-        else:
-            gamma_vals = np.array(self.max_gamma).reshape(1)
-
-        (
-            self.nullsp["v_"],
-            self.nullsp["norm_"],
-            self.nullsp["gamma"],
-        ) = self.nullspace_calc(gs=gamma_vals)
-        cons_dict = self.eval_constraint(gamma_vals[-1], methods=self.opt_gamma_method)
-        con_val = cons_dict[self.opt_gamma_method]
-        print(f"Constraint value: {con_val:.12f}, Method {self.opt_gamma_method}")
-
-        if 0:
-            self.nullsp["v"] = np.array(
-                [self.nullsp[self.key_beta] - self.nullsp[self.key_alpha]]
-            )
-            self.nullsp["v_"] = np.array(
-                self.nullsp[self.key_beta] - [self.nullsp[self.key_alpha]]
-            )
-            self.nullsp["gamma"] = 0
-            self.max_gamma = np.inf
+        solution = minimize(
+            objective_gamma,
+            50,
+            method="SLSQP",
+            bounds=[(10**-7, 10**7)],
+            constraints={"type": "ineq", "fun": constraint},
+            tol=10**-7,
+        )
+        tock = time.time()
+        if verbose:
+            print(solution.x[0])
+            print(f"Scipy Optimization took {tock-tick:.2f} seconds")
+        return solution.x[0], constraint(solution.x[0])
 
     def eval_constraint(
         self,
@@ -436,8 +440,8 @@ class Nullspace:
             self.nullsp["v_"],
             self.nullsp["gamma"],
             self.X,
-            self.data.x,
-            self.data.y_,
+            self.x,
+            self.y,
             name=title,
             coef_name_alpha=self.w_alpha_name,
             coef_name_beta=self.w_beta_name,

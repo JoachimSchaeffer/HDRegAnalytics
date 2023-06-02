@@ -19,8 +19,7 @@ def optimize_pls(
     folds: int = 10,
     nb_stds: int = 1,
     min_distance_search: bool = False,
-    featlin: float = 0,
-    **kwargs,
+    beta_prop: float = 0,
 ) -> dict:
     """Optimize the number of components for PLS regression."""
 
@@ -46,11 +45,11 @@ def optimize_pls(
         stds[comp - 1] = scores.std()
 
         if min_distance_search:
-            # Find the PLS vector that has minimal L2 distance to the featlin vector.
+            # Find the PLS vector that has minimal L2 distance to the beta_prop vector.
             # Comparing these two vector can subsequently tell us, whether we're close and the feature should be considered or not.
             pls = PLSRegression(n_components=comp, scale=False)
             reg = pls.fit(X, y)
-            diff_vec = featlin - reg.coef_.reshape(-1)
+            diff_vec = beta_prop - reg.coef_.reshape(-1)
             dist_l2.append(np.linalg.norm(diff_vec, ord=2))
 
     if min_distance_search:
@@ -113,24 +112,18 @@ def optimize_pls(
     return {"cv_res": cv_res_dict, "algorithm": "PLS"}
 
 
-# TODO: Clean up this function, it's a mess and unclear why it is depending on featlin.
-def optimize_rr(
+def optimize_rr_cv(
     X: np.ndarray,
     y: np.ndarray,
-    alpha_lim: list = None,
+    *,
+    alpha_lim: list = [10e-5, 10e3],
     folds: int = 5,
+    nb_iterations: int = 20,
+    nb_selected_values: int = 8,
     nb_stds: int = 1,
-    min_distance_search: bool = True,
-    featlin: float = 0,
     verbose: bool = False,
 ) -> dict:
     """Crossvalidation of RR algorithm and plotting of results"""
-
-    if alpha_lim is None:
-        alpha_lim = [10e-5, 10e3]
-
-    nb_iterations = 20
-    nb_selected_values = 8
     rmse = []
     stds = []
     alphas = []
@@ -221,79 +214,78 @@ def optimize_rr(
         "ceof_std_cv": coef_std_cv,
         "coef_cv": coef_cv,
     }
+    return cv_res_dict
 
-    # Rerun the entire loops if the min distance search is required
-    # Unfortunately, this is not very efficient, but necessary fro now to obtain the min distance
-    # TODO: find a way to optimize this
-    if min_distance_search:
-        alphas_l2 = []
-        dist_l2 = []
-        # min_dist_alpha = None
-        # min_dist = None
-        # Define the search space by selecting 4 alpha values, equally spaced in log space
-        alphas_ = np.logspace(
-            np.log10(alpha_lim[0]), np.log10(alpha_lim[1]), nb_selected_values
-        )
 
-        for i in range(nb_iterations):
-            dist_l2_iteration_i = []
-            alphas_l2.append(alphas_)
-            # Define the model
-            ridge = Ridge()
-            # Minimum distance search
-            for j, a in enumerate(alphas_):
-                ridge = Ridge(alpha=a)
-                ridge.fit(X, y)
-                diff_vec = featlin - ridge.coef_.reshape(-1)
-                dist_l2_ = np.linalg.norm(diff_vec, ord=2)
-                dist_l2_iteration_i.append(dist_l2_)
-            # Define the new grid
-            # Sort the dist_l2s of the last iteration
-            dist_l2.append(dist_l2_iteration_i)
-            sorted_norms = np.sort(dist_l2_iteration_i)
-            try:
-                alpha_min = alphas_[
-                    np.where(dist_l2_iteration_i == sorted_norms[0])[0][0] - 1
-                ]
-            except:  # noqa TODO: fix this
-                alpha_min = alphas_[
-                    np.where(dist_l2_iteration_i == sorted_norms[0])[0][0]
-                ]
-            # Making it more robust to look into a space that is a bit larger than just between the wo best values.
-            try:
-                alpha_min2 = alphas_[
-                    np.where(dist_l2_iteration_i == sorted_norms[0])[0][0] + 1
-                ]
-            except:  # noqa
-                alpha_min2 = alphas_[
-                    np.where(dist_l2_iteration_i == sorted_norms[1])[0][0]
-                ]
+def optimize_rr_min_dist(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    alpha_lim: list = None,
+    nb_iterations: int = 20,
+    nb_selected_values: int = 8,
+    beta_prop: np.ndarray = None,
+) -> dict:
+    """Unfortunately, this is not very efficient, but works for now to obtain the min distance"""
 
-            alphas_ = np.geomspace(alpha_min, alpha_min2, num=nb_selected_values)
+    alphas_l2 = []
+    dist_l2 = []
+    # min_dist_alpha = None
+    # min_dist = None
+    # Define the search space by selecting 4 alpha values, equally spaced in log space
+    alphas_ = np.logspace(
+        np.log10(alpha_lim[0]), np.log10(alpha_lim[1]), nb_selected_values
+    )
 
-        all_alphas = np.concatenate(alphas_l2, axis=0)
-        all_dist = np.concatenate(dist_l2, axis=0)
-        l2_min_loc = np.argmin(all_dist)
-        alpha_min_l2 = all_alphas[l2_min_loc]
+    for i in range(nb_iterations):
+        dist_l2_iteration_i = []
+        alphas_l2.append(alphas_)
+        # Define the model
+        ridge = Ridge()
+        # Minimum distance search
+        for j, a in enumerate(alphas_):
+            ridge = Ridge(alpha=a)
+            ridge.fit(X, y)
+            diff_vec = beta_prop - ridge.coef_.reshape(-1)
+            dist_l2_ = np.linalg.norm(diff_vec, ord=2)
+            dist_l2_iteration_i.append(dist_l2_)
+        # Define the new grid
+        # Sort the dist_l2s of the last iteration
+        dist_l2.append(dist_l2_iteration_i)
+        sorted_norms = np.sort(dist_l2_iteration_i)
+        try:
+            alpha_min = alphas_[
+                np.where(dist_l2_iteration_i == sorted_norms[0])[0][0] - 1
+            ]
+        except:  # noqa Fix this
+            alpha_min = alphas_[np.where(dist_l2_iteration_i == sorted_norms[0])[0][0]]
+        # Making it more robust to look into a space that is a bit larger than just between the wo best values.
+        try:
+            alpha_min2 = alphas_[
+                np.where(dist_l2_iteration_i == sorted_norms[0])[0][0] + 1
+            ]
+        except:  # noqa Fix this
+            alpha_min2 = alphas_[np.where(dist_l2_iteration_i == sorted_norms[1])[0][0]]
 
-        ridge = Ridge(alpha=alpha_min_l2)
-        ridge.fit(X, y)
-        coef_min_dist = ridge.coef_
+        alphas_ = np.geomspace(alpha_min, alpha_min2, num=nb_selected_values)
 
-        dist_l2_res_dict = {
-            "alphas": all_alphas,
-            "l2_distance": dist_l2,
-            "l2_min_param": alpha_min_l2,
-            "l2_min_loc": l2_min_loc,
-            "coef_min_dist": coef_min_dist,
-        }
-        return {
-            "cv_res": cv_res_dict,
-            "l2_distance_res": dist_l2_res_dict,
-            "algorithm": "RR",
-        }
+    all_alphas = np.concatenate(alphas_l2, axis=0)
+    all_dist = np.concatenate(dist_l2, axis=0)
+    l2_min_loc = np.argmin(all_dist)
+    alpha_min_l2 = all_alphas[l2_min_loc]
 
-    return {"cv_res": cv_res_dict, "algorithm": "RR"}
+    ridge = Ridge(alpha=alpha_min_l2)
+    ridge.fit(X, y)
+    coef_min_dist = ridge.coef_
+
+    dist_l2_res_dict = {
+        "alphas": all_alphas,
+        "l2_distance": dist_l2,
+        "l2_min_param": alpha_min_l2,
+        "l2_min_loc": l2_min_loc,
+        "coef_min_dist": coef_min_dist,
+    }
+    return dist_l2_res_dict
 
 
 def optimise_pls_cv(
@@ -304,7 +296,7 @@ def optimise_pls_cv(
     plot_components: bool = False,
     std: bool = False,
     min_distance_search: bool = False,
-    featlin: list = [],
+    beta_prop: np.ndarray = None,
 ) -> dict:
     """Crossvalidation of PLS algorithm and plotting of results.
 
@@ -348,10 +340,10 @@ def optimise_pls_cv(
         rmse[comp - 1] = -scores.mean()
         stds[comp - 1] = scores.std()
         if min_distance_search:
-            # Find the PLS vector that has minimal L2 distance to the featlin vector.
+            # Find the PLS vector that has minimal L2 distance to the beta_prop vector.
             # Comparing these two vector can subsequently tell us, whether we're close and the feature should be considered or not.
             reg = pls.fit(X - np.mean(X, axis=0), y - y.mean())
-            diff_vec = featlin - reg.coef_.reshape(-1)
+            diff_vec = beta_prop - reg.coef_.reshape(-1)
             l2_distance[comp - 1] = np.linalg.norm(diff_vec, 1)
 
     if min_distance_search:
