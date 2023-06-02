@@ -13,9 +13,8 @@ from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 
 from utils import optimize_pls  # type: ignore
-from utils import optimize_rr  # type: ignore
 from utils import nrmse  # type: ignore
-
+from utils import optimize_rr_cv, optimize_rr_min_dist
 from typing import Union
 
 
@@ -139,17 +138,22 @@ def optimize_cv(
         )
 
     elif algorithm == "RR":
-        res_dict = optimize_rr(
-            X,
-            y,
-            alpha_lim=alpha_lim,
-            folds=folds,
-            nb_stds=nb_stds,
-            min_distance_search=min_distance_search,
-            featlin=featlin,
-            verbose=verbose,
-            **kwargs,
-        )
+        if min_distance_search:
+            res_dict = optimize_rr_min_dist(
+                X,
+                y,
+                alpha_lim=alpha_lim,
+                beta_prop=featlin,
+            )
+        else:
+            res_dict = optimize_rr_cv(
+                X,
+                y,
+                alpha_lim=alpha_lim,
+                folds=folds,
+                nb_stds=nb_stds,
+                verbose=verbose,
+            )
 
     if kwargs.get("plot", False):
         key = "components" if algorithm == "PLS" else "alphas"
