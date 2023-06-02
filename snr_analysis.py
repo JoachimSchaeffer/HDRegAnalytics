@@ -201,11 +201,13 @@ plt.plot(x_lfp, 20 * np.log10(SNR_method_c))
 
 # %%
 
-# Apply them on the Standardized data and the non-standardized data, come up with stats for the SNR
+# TODO:
+# Apply them on the Trainign data
+# Standardized data and the non-standardized data, come up with stats for the SNR
 
 
 # %%
-# Neat, now lets use this inforamtion as a prior in the Bayesian linear regression.
+# Neat, now lets use this information as a prior in the Bayesian linear regression.
 
 # Example 1: Synthetic response: Here this will not yield benefits, as the heteroscadasticity is not present in the X y realtionship
 
