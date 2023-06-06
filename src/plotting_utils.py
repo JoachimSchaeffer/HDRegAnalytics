@@ -3,12 +3,6 @@ import numpy as np
 import pandas as pd  # type: ignore
 import seaborn as sns  # type: ignore
 
-import matplotlib  # type: ignore
-import matplotlib.pyplot as plt  # type: ignore
-import matplotlib.colors as mcolors  # type: ignore
-from matplotlib import cm  # type: ignore
-import matplotlib.cm as cmx  # type: ignore
-
 from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 
@@ -16,6 +10,14 @@ from utils import optimize_pls  # type: ignore
 from utils import nrmse  # type: ignore
 from utils import optimize_rr_cv, optimize_rr_min_dist
 from typing import Union
+
+import matplotlib
+import matplotlib.pylab as plt  # noqa
+import matplotlib.colors as mcolors  # noqa type: ignore
+from matplotlib import cm  # noqa type: ignore
+import matplotlib.cm as cmx  # noqa type: ignore
+
+colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 
 
 def plot_x_tt2(
@@ -516,3 +518,87 @@ def scatter_predictions(
         return fig, ax
     else:
         return None
+
+
+def plot_snr_analysis(
+    X: np.ndarray,
+    snr_power: np.ndarray,
+    noise_power: np.ndarray,
+    *,
+    x_label: str = "Continous Domain, x",
+    x: np.ndarray = None,
+    s: float = None,
+    title: str = "SNR Analysis, Bspline",
+):
+    """
+    Plotting the SNR, data stats snr/mean and snr/std ratios.
+    If you pass X_std, care should be taken b.c. the snr analysis is done on X wiht readded mean.
+    Some code from here : https://stackoverflow.com/questions/20356982/matplotlib-colour-multiple-twinx-axes
+    """
+    snr = 10 * np.log10(snr_power)
+    if x is None:
+        x = np.arange(X.shape[1])
+    abs_x_mean = np.abs(X.mean(axis=0).T)
+    std_x = X.std(axis=0).T
+    fig, ax = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+    # SNR plot
+    ax0_0_twinx = ax[0].twinx()
+    ax0_1_twinx = ax[0].twinx()
+    offset = 1.15
+    ax0_1_twinx.spines["right"].set_position(("axes", offset))
+
+    ax[0].plot(x, snr, lw=1.5, color="k")
+    ax[0].set_ylabel("SNR [dB]")
+    (snr_par,) = ax0_0_twinx.plot(x, snr_power, lw=1.5, color=colors_IBM[0])
+    ax0_0_twinx.set_ylabel("SNR")
+    (noise_par,) = ax0_1_twinx.plot(x, noise_power, lw=1.5, color=colors_IBM[3])
+    ax0_1_twinx.set_ylabel("Noise Power")
+    ax0_1_twinx.get_yaxis().get_offset_text().set_position((offset, offset - 0.1))
+
+    if s is not None and title is None:
+        ax[0].set_title(f"SNR Analysis, Bspline, s={s}")
+    else:
+        ax[0].set_title(title)
+
+    # Mean, and std plot of the data
+    ax1_twinx = ax[1].twinx()
+    ax[1].plot(x, abs_x_mean, label="Mean", lw=1.5, color="k")
+    ax[1].set_ylabel(r"$\overline{X}$")
+    (std_,) = ax1_twinx.plot(x, std_x, label="Std.", lw=1.5, color=colors_IBM[0])
+    ax1_twinx.set_ylabel(r"$\sigma$")
+    ax[1].set_xlabel(x_label)
+
+    # SNR*std plot
+    # ax_2_twinx = ax[2].twinx()
+    # ax2_1_twinx = ax[2].twinx()
+    # ax2_1_twinx.spines["right"].set_position(("axes", 1.15))
+    # ax[2].plot(x, std_x / snr, lw=1.5, color="k")
+    # Logscale
+    # ax[2].set_yscale("log")
+    # ax[2].set_ylabel(r"SNR/$\sigma$")
+    # (std_ratio,) = ax_2_twinx.plot(x, 1 / snr, lw=1.5, color=colors_IBM[0])
+
+    # ax_2_twinx.set_ylabel(r"SNR/$\sigma$ (constant variance)")
+    # ax[2].set_xlabel(x_label)
+    # (snr_scale_,) = ax2_1_twinx.plot(
+    #    x, snr_power / snr_power, lw=1.5, color=colors_IBM[3]
+    # )
+
+    twinx_list = [ax0_0_twinx, ax0_1_twinx, ax1_twinx]
+    # , ax_2_twinx, ax2_1_twinx]
+    par_list = [snr_par, noise_par, std_]
+    # , std_ratio, snr_scale_]
+
+    for par_, twin_ in zip(par_list, twinx_list):
+        twin_.yaxis.label.set_color(par_.get_color())
+        twin_.spines["right"].set_edgecolor(par_.get_color())
+        twin_.tick_params(axis="y", colors=par_.get_color())
+
+    # make background white
+    fig.patch.set_facecolor("white")
+
+    ax[0].set_xlim(x[0], x[-1])
+    plt.tight_layout()
+
+    plt.show()

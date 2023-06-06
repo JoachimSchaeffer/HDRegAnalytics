@@ -1,8 +1,3 @@
-# Script to anlyze the Singal-to-Noise ratio of the Battery data
-# 1. Fit a smooth function to the data
-# Analyse the average and standard deviation of the SNR assoicated with each voltage!
-
-# %%
 import sys
 import os
 
@@ -14,6 +9,23 @@ from scipy.interpolate import splrep, BSpline  # noqa
 from symfit import parameters, variables, sin, cos, Fit, Piecewise, Model, Eq  # noqa
 import matplotlib.pyplot as plt  # noqa
 from plotting_utils import plot_X  # noqa
+
+data_path = "./data/"
+lfp_df = pd.read_csv(data_path + "lfp_slim.csv", index_col=0)
+
+X_lfp = np.array(lfp_df.iloc[:, 0:1000])
+X_lfp = X_lfp[:, ::-1]
+y_lfp_true = np.array(lfp_df.iloc[:, 1000])
+x_lfp = np.linspace(2.0, 3.5, 1000)
+
+X_lfp_train = np.array(X_lfp[lfp_df.iloc[:, 1002] == 0, :])
+y_lfp_train_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 0])
+X_lfp_test = np.array(X_lfp[lfp_df.iloc[:, 1002] == 1, :])
+y_lfp_test_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 1])
+X_lfp_test2 = np.array(X_lfp[lfp_df.iloc[:, 1002] == 2, :])
+y_lfp_test2_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 2])
+
+fig, ax = plot_X(X_lfp_train, x_lfp)
 
 
 def fourier_series(x, f, n=0):
@@ -34,26 +46,6 @@ def fourier_series(x, f, n=0):
     )
     return series
 
-
-# %%
-# Cool, now lets try this next with the battery data
-# Load the LFP Dataset
-data_path = "./data/"
-lfp_df = pd.read_csv(data_path + "lfp_slim.csv", index_col=0)
-
-X_lfp = np.array(lfp_df.iloc[:, 0:1000])
-X_lfp = X_lfp[:, ::-1]
-y_lfp_true = np.array(lfp_df.iloc[:, 1000])
-x_lfp = np.linspace(2.0, 3.5, 1000)
-
-X_lfp_train = np.array(X_lfp[lfp_df.iloc[:, 1002] == 0, :])
-y_lfp_train_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 0])
-X_lfp_test = np.array(X_lfp[lfp_df.iloc[:, 1002] == 1, :])
-y_lfp_test_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 1])
-X_lfp_test2 = np.array(X_lfp[lfp_df.iloc[:, 1002] == 2, :])
-y_lfp_test2_true = np.array(y_lfp_true[lfp_df.iloc[:, 1002] == 2])
-
-fig, ax = plot_X(X_lfp_train, x_lfp)
 
 # %%
 # Cool, lets move on and calculate the SNR for each voltage and for each battery.
@@ -99,6 +91,7 @@ plt.show()
 
 # --> A fourier basis function is not a good fit for this data, as the data has section that are flat and not periodic.
 # It would be required to fit a piecewise function to the data.
+
 
 # %% Or to fit a simple polynomial of order n to the data.
 z = np.polyfit(x_lfp, y_fitting, 5)
@@ -156,59 +149,3 @@ plt.plot(x_lfp, fit.model(x=x_lfp, **fit_result.params).y, "r--")
 plt.show()
 
 # This toolbox  doesnt seem to do the job...
-
-# %% BSplines are an alternative!
-
-tck = splrep(x=x_lfp, y=y_fitting, s=0.000001, k=5)
-
-y_spline = BSpline(*tck)(x_lfp)
-
-# plt.plot(x_lfp, y_fitting)
-plt.plot(x_lfp, y_spline, "r--")
-plt.show()
-
-plt.plot(x_lfp, (y_fitting - y_spline) / y_fitting, "r--")
-plt.show()
-
-
-# %% Now do it for the whole dataset
-# create en empty array X to store the spline smoothed data
-X_lfp_spline = np.empty(X_lfp.shape)
-# X_lfp_spline_std = np.empty(X_lfp.shape)
-
-# Loop over all the batteries and fit a spline to the data
-for i in range(X_lfp.shape[0]):
-    tck = splrep(x=x_lfp, y=X_lfp[i, :], s=0.000001, k=5)
-    X_lfp_spline[i, :] = BSpline(*tck)(x_lfp)
-
-# Ideas for methods from: https://github.com/hrtlacek/SNR/blob/main/SNR.ipynb
-# For this case it really doensn't matter at all!
-
-Power_signal = np.mean(X_lfp_spline, axis=0) ** 2
-Power_signal_with_noise = np.mean(X_lfp, axis=0) ** 2
-Power_noise = np.mean((X_lfp - X_lfp_spline) ** 2, axis=0)
-
-SNR_method_a = (Power_signal_with_noise - Power_noise) / Power_noise
-SNR_method_b = Power_signal / Power_noise
-SNR_method_c = np.mean(X_lfp_spline, axis=0) / np.std(X_lfp_spline, axis=0)
-
-plt.plot(x_lfp, 10 * np.log10(SNR_method_a))
-plt.plot(x_lfp, 10 * np.log10(SNR_method_b))
-plt.plot(x_lfp, 20 * np.log10(SNR_method_c))
-
-# -> Great! This Shows nicely that the noise is most likely heteroscedastic, violates the usual assumption!
-# negative SNR means that there is more noise than signal! (only when measured in dB)
-
-# %%
-
-# TODO:
-# Apply them on the Trainign data
-# Standardized data and the non-standardized data, come up with stats for the SNR
-
-
-# %%
-# Neat, now lets use this information as a prior in the Bayesian linear regression.
-
-# Example 1: Synthetic response: Here this will not yield benefits, as the heteroscadasticity is not present in the X y realtionship
-
-# Example 2: Cycle life response, here things might become interesting.

@@ -1,9 +1,11 @@
 # Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
+from scipy.interpolate import splrep, BSpline  # noqa
+from scipy.signal import savgol_filter  # noqa
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.colors as clr  # type: ignore
-from plotting_utils import plot_corrheatmap
+from plotting_utils import plot_corrheatmap, plot_snr_analysis
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 cmap_IBM = clr.LinearSegmentedColormap.from_list(
@@ -16,6 +18,9 @@ class HD_Data:
     Class for high dimensional data X, over a continous domain x,
     with associated response y, for regression in high dimensions.
     The class is required for the nullspace analysis.
+
+    You need to create two instances of this class, one for the training data
+    and one for the test data.
     """
 
     def __init__(self, X: np.ndarray, x: np.ndarray, y: np.ndarray, **kwargs):
@@ -135,3 +140,110 @@ class HD_Data:
         ax.set_xlabel(labelx)
         ax.set_ylabel(labely)
         return ax
+
+    def analyze_snr_by_splines(
+        self,
+        *,
+        s: float = 0.000001,
+        k: int = 5,
+        mode: str = "X_raw",
+        plot_snr: bool = True,
+        plot_i: int = None,
+        **kwargs,
+    ) -> None:
+        """
+        Assuming we can estimate the noise by fitting a BSpline to the data, we can
+        estime the SNR. This assumes that the underlying function is smooth and that
+        can be reasonaby approximated by a spline.
+
+        The spline parameter s should be chosen such that the spline fits the data according the
+        desired smoothness. The default value is 0.000001 which works well for the LFP data, but
+        need to be adjusted for other data.
+
+        Arguments
+        ---------
+        s : float, default=0.000001
+            Smoothing factor for the spline fit.
+        k : int, default=5
+            Degree of the spline fit.
+        mode : str, default="X_raw"
+            Data to be analyzed. Can be "X_raw" or "X_std".
+            X_std is experimental. The mean is added back to the data before calculating the SNR.
+            It is debatable whether this makes sence, but it's an interesting experiment.
+        plot_snr : bool, default=True
+            Plot the SNR analysis.
+        plot_i : int, default=None
+            Plot the spline fit for the i-th battery.
+        **kwargs : dict
+            additional arguments passed to calc_snr function.
+        """
+
+        if mode == "X_raw":
+            X_ = self.X
+        elif mode == "X_std":
+            X_ = self.X_std + self.X.mean(axis=0)
+        else:
+            raise ValueError("Mode must be 'X_raw' or 'X_std'.")
+
+        X_spline = np.empty(self.X.shape)
+
+        # Loop over all the batteries and fit a spline to the data
+        for i in range(X_.shape[0]):
+            tck = splrep(x=self.x, y=X_[i, :], s=s, k=k)
+            X_spline[i, :] = BSpline(*tck)(self.x)
+
+        snr, noise_power = calc_snr(X_spline, X_)
+        plot_snr_analysis(X_, snr, noise_power, x=self.x, s=s, title="", **kwargs)
+
+        if plot_i is not None:
+            X_i = X_[plot_i, :]
+            X_spline_i = X_spline[plot_i, :]
+            fig, ax = plt.subplots()
+            ax.plot(self.x, X_i, label="X")
+            ax.plot(self.x, X_spline_i, label="X_spline")
+            if "x_label" in kwargs:
+                ax.set_xlabel(kwargs["x_label"])
+            else:
+                ax.set_xlabel("Continous Domain, x")
+            ax.set_ylabel("X")
+            ax.set_title(f"X_i and X_i_spline, i={plot_i}")
+            ax.legend()
+            plt.show()
+
+        if mode == "X_raw":
+            self.X_spline = X_spline
+            self.snr = snr
+            self.snr_dB = 10 * np.log10(snr)
+            self.noise_power = noise_power
+        elif mode == "X_std":
+            self.X_spline_std = X_spline
+            self.snr_std = snr
+            self.snr_dB_std = 10 * np.log10(snr)
+            self.power_noise_std = noise_power
+
+    def smooth_snr(self, *, window_length: int = 51, polyorder: int = 5) -> None:
+        snr = self.snr
+        self.snr_smooth = savgol_filter(snr, window_length, polyorder)
+        self.snr_smooth_dB = savgol_filter(10 * np.log10(snr), window_length, polyorder)
+
+
+def calc_snr(
+    X_spline: np.ndarray,
+    X: np.ndarray,
+    *,
+    method: str = "A",
+) -> np.ndarray:
+    """Ideas for methods from: https://github.com/hrtlacek/SNR/blob/main/SNR.ipynb"""
+    Power_signal = np.mean(X_spline, axis=0) ** 2
+    Power_signal_with_noise = np.mean(X, axis=0) ** 2
+    Power_noise = np.mean((X - X_spline) ** 2, axis=0)
+
+    if method == "A":
+        snr = (Power_signal_with_noise - Power_noise) / Power_noise
+    elif method == "B":
+        snr = Power_signal / Power_noise
+    elif method == "C":
+        snr = np.mean(X_spline, axis=0) / np.std(X_spline, axis=0)
+    else:
+        raise ValueError("Method must be 'A', 'B' or 'C', read docstring for more info.")
+    return snr, Power_noise
