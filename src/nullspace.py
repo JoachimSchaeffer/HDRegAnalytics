@@ -136,6 +136,7 @@ class Nullspace:
         save_plot: bool = False,
         path_save: str = "",
         file_name: str = "",
+        ax_labelstr: tuple[str, str] = ("a)", "b)"),
     ) -> Union[Nullspace, tuple[Nullspace, plt.figure, plt.axes]]:
         """Run the nullspace analysis. Make sure to learn/set the relevant weights first."""
 
@@ -160,7 +161,7 @@ class Nullspace:
         self.optimize_gamma(multi_gammas=multi_gammas)
 
         if plot_results:
-            fig, ax = self.plot_nullspace_analysis()
+            fig, ax = self.plot_nullspace_analysis(ax_labelstr=ax_labelstr)
             if save_plot:
                 fig.savefig(path_save + file_name)
 
@@ -433,6 +434,7 @@ class Nullspace:
         self,
         *,
         title: str = "",
+        ax_labelstr: tuple[str, str] = ("a)", "b)"),
     ) -> tuple[plt.figure, plt.axes]:
         fig, ax = plot_nullspace_analysis(
             self.w_alpha,
@@ -448,23 +450,37 @@ class Nullspace:
             max_gamma=self.max_gamma,
             con_val=self.con_val,
             method=self.opt_gamma_method,
+            ax_labelstr=ax_labelstr,
         )
         return fig, ax
 
     def scatter_predictions(
         self,
+        *,
         ax: bool = None,
         return_fig: bool = False,
+        ax_labelstr: str = "c)",
+        labels: list[str] = None,
+        title: str = "",
     ):
         """Method that scatters based on nullspace correction."""
 
         w = [(self.w_alpha + self.nullsp["v_"][-1, :]), self.w_alpha, self.w_beta]
-        labels = [
-            r"$\mathbf{X}(\beta + \mathbf{v})$",
-            r"$\mathbf{X}\beta$",
-            r"$\mathbf{X}\beta_{T1}$",
-        ]
+        if labels is None:
+            labels = [
+                r"$\mathbf{X}(\beta + \mathbf{v})$",
+                r"$\mathbf{X}\beta$",
+                r"$\mathbf{X}\beta$",
+            ]
 
         return scatter_predictions_helper(
-            self.X, self.y, w, labels, ax=ax, return_fig=return_fig
+            self.X,
+            self.y,
+            np.mean(self.data.y),
+            w,
+            labels,
+            ax=ax,
+            return_fig=return_fig,
+            ax_labelstr=ax_labelstr,
+            title=title,
         )

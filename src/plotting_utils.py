@@ -16,6 +16,7 @@ import matplotlib.pylab as plt  # noqa
 import matplotlib.colors as mcolors  # noqa type: ignore
 from matplotlib import cm  # noqa type: ignore
 import matplotlib.cm as cmx  # noqa type: ignore
+import matplotlib.transforms as mtransforms  # noqa type: ignore
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 
@@ -335,6 +336,7 @@ def plot_nullspace_analysis(
     max_gamma: float = -9999,
     con_val: float = -9999,
     method: str = "",
+    ax_labelstr: tuple[str, str] = ("a)", "b)"),
 ) -> Union[tuple[plt.figure, plt.axes], None]:
     """Plot the nullspace correction"""
     y = y - np.mean(y)
@@ -370,6 +372,17 @@ def plot_nullspace_analysis(
     ax[0].vlines(0, y_min, y_max, colors="k", linestyles="solid", linewidths=0.8)
     ax[0].hlines(0, min(x), max(x), colors="k", linestyles="solid", linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
+    trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
+    ax[0].text(
+        0.0,
+        1.0,
+        ax_labelstr[0],
+        transform=ax[0].transAxes + trans,
+        fontsize="large",
+        va="bottom",
+        fontweight="bold",
+        fontfamily="monospace",
+    )
 
     # Initializing the nrmse error to 2, makes it easy to spot issues
     nrmse = 2 * np.ones(v.shape[0])
@@ -378,7 +391,12 @@ def plot_nullspace_analysis(
             np.max(y) - np.min(y)
         )
         ax[1].plot(
-            x, w_alpha + v[i, :], color=scalarMap.to_rgba(100 * nrmse[i]), zorder=i
+            x,
+            w_alpha + v[i, :],
+            color=scalarMap.to_rgba(100 * nrmse[i]),
+            zorder=i,
+            linewidth=0.5,
+            # linestyle=(0, (1, 2)),
         )
 
     # markevery = int(len(x) / 15)
@@ -402,23 +420,28 @@ def plot_nullspace_analysis(
         zorder=v.shape[0] + 1,
     )
     ax[1].plot(
-        x, w_beta, label=coef_beta_label, color="k", linewidth=2.5, zorder=v.shape[0] + 1
+        x,
+        w_beta,
+        label=coef_beta_label,
+        color="k",
+        linewidth=5,
+        zorder=-10,
+        # linestyle=(0, (6, 4)),
     )
 
     label = format_label(max_gamma, con_val=con_val, method=method)
 
-    ax[1].fill_between(
-        x.reshape(-1),
-        w_alpha,
-        y2=w_alpha + v[-1, :],
+    ax[1].plot(
+        x,
+        v[-1, :],
+        label="v",
         color="darkgrey",
         zorder=-1,
-        alpha=0.8,
-        label=label,
+        linestyle=(0, (2, 4)),
     )
 
     ax[1].set_xlabel("x")
-    ax[1].set_ylabel(r"Regression Coefficients $(\beta)$")
+    ax[1].set_ylabel("Coefficients")
 
     # Set bottom and left spines as x and y axes of coordinate system
     y_min = ax[1].get_ylim()[0]
@@ -429,6 +452,16 @@ def plot_nullspace_analysis(
     ax[0].set_xlim(min(x), max(x))
     ax[1].set_ylim(y_min, y_max)
     ax[1].set_title("Nullspace Perspective")
+    ax[1].text(
+        0.0,
+        1.0,
+        ax_labelstr[1],
+        transform=ax[1].transAxes + trans,
+        fontsize="large",
+        va="bottom",
+        fontweight="bold",
+        fontfamily="monospace",
+    )
 
     cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
     cb.set_label(r"NRMSE (%)", labelpad=10)
@@ -479,11 +512,13 @@ def plot_X(
 def scatter_predictions(
     X: np.ndarray,
     y_: np.ndarray,
+    y_mean: np.ndarray,
     w: list,
     labels: list,
     title: str = "",
     ax: plt.axes = None,
     return_fig: bool = False,
+    ax_labelstr: str = "",
 ) -> Union[tuple[plt.figure, plt.axes], None]:
     """Method that scatter plots the predictions associated with different regression coefficients."""
 
@@ -496,23 +531,78 @@ def scatter_predictions(
     else:
         fig = ax.get_figure()
 
+    y = y_ + y_mean
+    y_pred = []
+    nrmse_ = []
     for i, (w_, label) in enumerate(zip(w, labels)):
-        y_pred = X @ w_
-        nrmse_ = nrmse(y_, y_pred)
-        ax.scatter(
-            y_,
-            y_pred,
-            label=f"{label}, NRMSE: {nrmse_:.2f}%",
-            marker=markers[i],
-            color=colors[i],
-        )
+        y_pred.append((X @ w_) + y_mean)
+        nrmse_.append(nrmse(y, y_pred[i]))
 
-    ax.set_xlabel(r"$y-\bar{y}$")
-    ax.set_ylabel(r"$\hat y-\bar{y}$")
+    # Make a twinx axis
+    ax_twinx = ax.twinx()
+    ax_twinx.spines["right"].set_position(("axes", 1.15))
+    ax_twinx.set_ylabel(r"$y-\hat{y}$")
+
+    # Scatter the prediction differences of beta_a and beta_a + v
+    ax_twinx.scatter(
+        y,
+        y_pred[0] - y_pred[1],
+        label=f"{labels[0]}",
+        marker="s",
+        alpha=0.5,
+        color=colors[5],
+    )
+
+    # Scatter the predictions of beta_a
+    ax.scatter(
+        y,
+        y_pred[0],
+        label=f"{labels[0]}, NRMSE: {nrmse_[0]:.2f}%",
+        s=150,
+        facecolors="none",
+        linestyle=(2, (2, 4)),
+        edgecolors=colors[0],
+    )
+
+    # Scatter the predictions of beta_a + v
+    ax.scatter(
+        y,
+        y_pred[1],
+        label=f"{labels[1]}, NRMSE: {nrmse_[1]:.2f}%",
+        s=150,
+        facecolors="none",
+        linestyle=(0, (4, 6)),
+        edgecolors=colors[1],
+    )
+
+    # Scatter the predcitions of bete_b
+    ax.scatter(
+        y,
+        y_pred[2],
+        label=f"{labels[2]}, NRMSE: {nrmse_[2]:.2f}%",
+        s=5,
+        facecolors=colors[2],
+        edgecolors=colors[2],
+    )
+
+    ax.set_xlabel(r"$y$")
+    ax.set_ylabel(r"$\hat{y}$")
     ax.set_title(title)
 
+    trans = mtransforms.ScaledTranslation(-50 / 72, 5 / 72, fig.dpi_scale_trans)
+    ax.text(
+        0.0,
+        1.0,
+        ax_labelstr,
+        transform=ax.transAxes + trans,
+        fontsize="large",
+        va="bottom",
+        fontweight="bold",
+        fontfamily="monospace",
+    )
+
     legend_fontsize = matplotlib.rcParams["legend.fontsize"]
-    ax.legend(frameon=False, fontsize=legend_fontsize - 4)
+    ax.legend(frameon=False, fontsize=legend_fontsize - 1.5)
 
     if return_fig:
         return fig, ax
