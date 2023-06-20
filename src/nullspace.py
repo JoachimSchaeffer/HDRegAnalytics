@@ -148,22 +148,30 @@ class Nullspace:
         self.con_thres = con_thres
         range_y = np.max(self.y) - np.min(self.y)
 
-        # If the value of the constraint is between 0 and -1 use percentage ratio
-        if opt_gamma_method == "NRMSE" and self.con_thres < 0:
-            nrmse_alpha = (
-                100
-                * mean_squared_error(self.y, self.X @ (self.w_alpha), squared=False)
-                / range_y
-            )
-            nrmse_beta = (
-                100
-                * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
-                / range_y
-            )
-            self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
-            print("NRMSE constraint threshold: ", self.con_thres)
+        if "gamma_vals" in kwargs.keys():
+            self.max_gamma = np.max(kwargs["gamma_vals"])
+            # drop the key from the dictionary
+            kwargs.pop("gamma_vals")
+            cons_dict = self.eval_constraint(self.max_gamma, methods=self.opt_gamma_method)
+            self.con_val = cons_dict[self.opt_gamma_method]
+            print(f"Constraint value: {self.con_val:.12f}")
+        else:
+            # If the value of the constraint is between 0 and -1 use percentage ratio
+            if opt_gamma_method == "NRMSE" and self.con_thres < 0:
+                nrmse_alpha = (
+                    100
+                    * mean_squared_error(self.y, self.X @ (self.w_alpha), squared=False)
+                    / range_y
+                )
+                nrmse_beta = (
+                    100
+                    * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
+                    / range_y
+                )
+                self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
+                print("NRMSE constraint threshold: ", self.con_thres)
 
-        self.optimize_gamma(nullspace_path=nullspace_path)
+            self.optimize_gamma(nullspace_path=nullspace_path)
 
         if plot_results:
             fig, ax = self.plot_nullspace_analysis(**kwargs)

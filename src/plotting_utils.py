@@ -513,7 +513,7 @@ def scatter_predictions(
         marker="s",
         alpha=0.4,
         color=colors[cid],
-        zorder=1,
+        zorder=2,
     )
 
     ax_twinx.yaxis.label.set_color(colors[cid])
@@ -521,7 +521,7 @@ def scatter_predictions(
     ax_twinx.tick_params(axis="y", colors=colors[cid])
     ax_twinx.get_yaxis().get_offset_text().set_position((1.14, 1.14 - 0.1))
     # location bottom right corner
-    ax_twinx.legend(loc=4, frameon=False)
+    ax_twinx.legend(loc=4, frameon=True).set_zorder(1)
     # make background white
     fig.patch.set_facecolor("white")
 
@@ -535,7 +535,7 @@ def scatter_predictions(
         facecolors="none",
         linestyle=(15, (10, 10)),
         edgecolors=colors[0],
-        zorder=2,
+        zorder=3,
     )
 
     # Scatter the predictions of beta_a + v
@@ -548,7 +548,7 @@ def scatter_predictions(
         facecolors="none",
         linestyle=(5, (10, 10)),
         edgecolors=colors[2],
-        zorder=3,
+        zorder=4,
     )
 
     # Scatter the predcitions of bete_b
@@ -559,7 +559,7 @@ def scatter_predictions(
         s=20,
         facecolors=colors[3],
         edgecolors=colors[3],
-        zorder=4,
+        zorder=5,
     )
 
     ax.set_xlabel(r"$y$")
@@ -594,7 +594,7 @@ def scatter_predictions(
     )
 
     legend_fontsize = matplotlib.rcParams["legend.fontsize"]
-    ax.legend(frameon=False, fontsize=legend_fontsize - 1.5, loc=2)
+    ax.legend(frameon=True, fontsize=legend_fontsize - 1.5, loc=2).set_zorder(1)
 
     if return_fig:
         return fig, ax
