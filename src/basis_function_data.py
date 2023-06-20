@@ -59,13 +59,14 @@ class BasisFunction(ABC):
 
 
 class PolynomBasis(BasisFunction):
-    def __init__(self, num_basis: int, data_limits: list = None, **kwargs):
+    def __init__(self, num_basis: int, data_limits: list = None, center : float = None, **kwargs):
         super().__init__(num_basis, data_limits, **kwargs)
+        self.center = center
 
     def __call__(self, d: np.ndarray) -> np.ndarray:
-        centre = self.data_limits[0] / 2.0 + self.data_limits[1] / 2.0
+        # centre = self.data_limits[0] / 2.0 + self.data_limits[1] / 2.0
         span = self.data_limits[1] - self.data_limits[0]
-        z = d - centre
+        z = d - self.center
         z = 2 * z / span
         Phi = np.zeros((d.shape[0], self.num_basis))
         for i in range(self.num_basis):

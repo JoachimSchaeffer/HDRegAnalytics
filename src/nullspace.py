@@ -176,7 +176,7 @@ class Nullspace:
                 self.objective_function_trajectory()
             else:
                 print(
-                    f"Constraint value: {self.con_val}, is too close to the numeric precision for trajectory analysis"
+                    f"Constraint value: {self.con_val}, is too close to the numeric precision for path analysis"
                 )
         if plot_results:
             return self, fig, ax
@@ -228,7 +228,8 @@ class Nullspace:
         nullspace_path: bool = False,
     ) -> None:
         """Optimize the gamma parameter for the nullspace correction."""
-        gamma, con_val = self.scipy_opt_gamma(verbose=False)
+        # gamma, con_val = self.scipy_opt_gamma(verbose=False)
+        gamma, con_val = self.naive_opt_gamma(verbose=False)
         self.max_gamma = gamma
         self.con_val = con_val
 
@@ -308,10 +309,11 @@ class Nullspace:
 
     def scipy_opt_gamma(self, verbose: bool = True) -> float:
         tick = time.time()
-        warnings.warn("Warning: The function optimize gamma is not fully tested yet!")
-        raise NotImplementedError(
-            "The function optimize gamma is not fully tested yet, you have to remove this line for testing it."
-        )
+        if self.opt_gamma_method == "Xv":
+            warnings.warn("Warning: The function scipy optimize gamma is not fully tested yet for Xv cosntraints!")
+            raise NotImplementedError(
+                "The function optimize gamma is not fully tested yet for Xv constraints, you have to remove this line for testing it."
+            )
 
         def constraint(x):
             con = self.eval_constraint(x, methods=[self.opt_gamma_method])[

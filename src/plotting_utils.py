@@ -594,7 +594,7 @@ def scatter_predictions(
     )
 
     legend_fontsize = matplotlib.rcParams["legend.fontsize"]
-    ax.legend(frameon=False, fontsize=legend_fontsize - 1.5)
+    ax.legend(frameon=False, fontsize=legend_fontsize - 1.5, loc=2)
 
     if return_fig:
         return fig, ax
