@@ -29,11 +29,11 @@ class Featlin:
     By choice we decided not to inherit other classes in here, but instead realy on composition.
     """
 
-    def __init__(self, X=None, x=None, y=None, data_obj=None, feat_funcs=None):
+    def __init__(self, X=None, d=None, y=None, data_obj=None, feat_funcs=None):
         """Initiate Featlin object.
-        Either pass X, x, y, where 'x' is either the domain of your measurements (e.g. 2.0V-3.5V or Hz fro spectra)
-        You can also pass a linearly spaced vecotr x, if the functional domain is less well defined.
-        Only the plots will be affected by x.
+        Either pass X, d, y, where 'd' is either the domain of your measurements (e.g. 2.0V-3.5V or Hz fro spectra)
+        You can also pass a linearly spaced vecotr d, if the functional domain is less well defined.
+        Only the plots will be affected by d.
 
         Parameters
         ----------
@@ -50,9 +50,9 @@ class Featlin:
             else:
                 self.data = data_obj
         else:
-            if x is None:
-                x = np.linspace(0, X.shape[1] - 1, X.shape[1])
-            self.data = HD_Data(X=X, x=x, y=y)
+            if d is None:
+                d = np.linspace(0, X.shape[1] - 1, X.shape[1])
+            self.data = HD_Data(X=X, d=d, y=y)
 
         if feat_funcs is None:
             feat_fun = [
@@ -448,7 +448,7 @@ class Featlin:
         # Linearized coefficients
         # nrmse_linfeat = self.nullspace_dict[feat_key]["lfun"]["nrmse"]
         axs[0].plot(
-            self.data.x,
+            self.data.d,
             lin_coef_.reshape(-1),
             label=r"$\beta_{T1}$: Feature coefficients",
             color="k",
@@ -486,7 +486,7 @@ class Featlin:
             else:
                 marker = "s"
             axs[0].plot(
-                self.data.x,
+                self.data.d,
                 reg.coef_.reshape(-1),
                 label=r"$\beta$:" + " " + label,
                 lw=2,
@@ -516,7 +516,7 @@ class Featlin:
             # nrmse_reg_nulls = nrmse(self.data.y_, X@(reg.coef_.reshape(-1)+nulls_.nullsp['v_'][-1,:]))
             # , NRMSE: {nrmse_reg_nulls:.2f}%
             axs[0].plot(
-                self.data.x,
+                self.data.d,
                 reg.coef_.reshape(-1) + nulls_.nullsp["v_"][-1, :],
                 label=r"$\beta + \mathbf{v}:$"
                 + " "
@@ -548,7 +548,7 @@ class Featlin:
                 for i in range(v_.shape[0]):
                     if i == 0:
                         axs[0].plot(
-                            self.data.x,
+                            self.data.d,
                             reg.coef_.reshape(-1) + v_[i, :],
                             label=label.split()[0],
                             lw=0.4,
@@ -557,7 +557,7 @@ class Featlin:
                         )
                     else:
                         axs[0].plot(
-                            self.data.x,
+                            self.data.d,
                             reg.coef_.reshape(-1) + v_[i, :],
                             lw=0.4,
                             color="#2b2b2b",
@@ -572,11 +572,11 @@ class Featlin:
         # label=r'close to $\mathcal{\mathbf{N}}(X) xyz$'
         # print(label)
 
-        x = self.data.x
+        d = self.data.d
         if std:
             y2 = nulls_.nullsp["w_alpha_std"] + nulls_.nullsp["v_"][-1, :]
             axs[0].fill_between(
-                x.reshape(-1),
+                d.reshape(-1),
                 nulls_.nullsp["w_alpha_std"],
                 y2=y2,
                 color="darkgrey",
@@ -586,7 +586,7 @@ class Featlin:
         else:
             y2 = nulls_.nullsp["w_alpha"] + nulls_.nullsp["v_"][-1, :]
             axs[0].fill_between(
-                x.reshape(-1),
+                d.reshape(-1),
                 nulls_.nullsp["w_alpha"],
                 y2=y2,
                 color="darkgrey",

@@ -15,7 +15,7 @@ cmap_IBM = clr.LinearSegmentedColormap.from_list(
 
 class HD_Data:
     """
-    Class for high dimensional data X, over a continous domain x,
+    Class for high dimensional data X, over a continous domain d,
     with associated response y, for regression in high dimensions.
     The class is required for the nullspace analysis.
 
@@ -23,9 +23,9 @@ class HD_Data:
     and one for the test data.
     """
 
-    def __init__(self, X: np.ndarray, x: np.ndarray, y: np.ndarray, **kwargs):
+    def __init__(self, X: np.ndarray, d: np.ndarray, y: np.ndarray, **kwargs):
         self.X = X
-        self.x = x
+        self.d = d
         self.y = y
         self = self.standardscaler(scale_y=True, scale_x=False)
         self = self.standardscaler(scale_y=False, scale_x=True)
@@ -110,7 +110,7 @@ class HD_Data:
         if cmap is None:
             cmap = cmap_IBM
         axs[0] = plot_corrheatmap(
-            axs[0], self.x, self.X, cmap, x_label, r"$|\rho|$ Columns"
+            axs[0], self.d, self.X, cmap, x_label, r"$|\rho|$ Columns"
         )
         axs[1] = plot_corrheatmap(
             axs[1],
@@ -126,16 +126,16 @@ class HD_Data:
     def plot_stats(
         self, ax: plt.axes, c1: str, c2: str, c3: str, labelx: str, labely: str
     ) -> plt.axes:
-        ax.plot(self.x, np.abs(np.mean(self.X, axis=0)), label="|Mean|", lw=2.5, color=c1)
+        ax.plot(self.d, np.abs(np.mean(self.X, axis=0)), label="|Mean|", lw=2.5, color=c1)
         ax.plot(
-            self.x,
+            self.d,
             np.abs(np.median(self.X, axis=0)),
             "--",
             label="|Median|",
             lw=2.5,
             color=c3,
         )
-        ax.plot(self.x, np.std(self.X, axis=0), "-.", label="Std.", lw=2.5, color=c2)
+        ax.plot(self.d, np.std(self.X, axis=0), "-.", label="Std.", lw=2.5, color=c2)
         ax.legend(loc=2)
         ax.set_xlabel(labelx)
         ax.set_ylabel(labely)
@@ -189,22 +189,22 @@ class HD_Data:
 
         # Loop over all the batteries and fit a spline to the data
         for i in range(X_.shape[0]):
-            tck = splrep(x=self.x, y=X_[i, :], s=s, k=k)
-            X_spline[i, :] = BSpline(*tck)(self.x)
+            tck = splrep(x=self.d, y=X_[i, :], s=s, k=k)
+            X_spline[i, :] = BSpline(*tck)(self.d)
 
         snr, noise_power = calc_snr(X_spline, X_)
-        plot_snr_analysis(X_, snr, noise_power, x=self.x, s=s, title="", **kwargs)
+        plot_snr_analysis(X_, snr, noise_power, x=self.d, s=s, title="", **kwargs)
 
         if plot_i is not None:
             X_i = X_[plot_i, :]
             X_spline_i = X_spline[plot_i, :]
             fig, ax = plt.subplots()
-            ax.plot(self.x, X_i, label="X")
-            ax.plot(self.x, X_spline_i, label="X_spline")
+            ax.plot(self.d, X_i, label="X")
+            ax.plot(self.d, X_spline_i, label="X_spline")
             if "x_label" in kwargs:
                 ax.set_xlabel(kwargs["x_label"])
             else:
-                ax.set_xlabel("Continous Domain, x")
+                ax.set_xlabel("Continous Domain, d")
             ax.set_ylabel("X")
             ax.set_title(f"X_i and X_i_spline, i={plot_i}")
             ax.legend()

@@ -16,12 +16,12 @@ class BasisDataConstructor:
         basis_function: BasisFunction,
         basis_weights: np.ndarray,
         targetfun: Callable[[np.ndarray], float],
-        x: np.ndarray,
+        d: np.ndarray,
         per_range: list = None,
         **kwargs,
     ):
         self.basis_function = basis_function
-        self.x = x
+        self.d = d
         self.kwargs = kwargs
         self.construct_X_data(basis_weights)
         self.construct_y_data(targetfun, per_range)
@@ -31,7 +31,7 @@ class BasisDataConstructor:
             raise ValueError(
                 "Number of basis weights per observation must equal the number defined for this object!"
             )
-        phi_vals = self.basis_function(self.x)
+        phi_vals = self.basis_function(self.d)
         self.X = np.zeros((basis_weights.shape[0], phi_vals.shape[0]))
         for i in range(basis_weights.shape[0]):
             # Iterate through the rows.
@@ -54,7 +54,7 @@ class BasisFunction(ABC):
         self.kwargs = kwargs
 
     @abstractmethod
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, d: np.ndarray) -> np.ndarray:
         pass
 
 
@@ -62,12 +62,12 @@ class PolynomBasis(BasisFunction):
     def __init__(self, num_basis: int, data_limits: list = None, **kwargs):
         super().__init__(num_basis, data_limits, **kwargs)
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, d: np.ndarray) -> np.ndarray:
         centre = self.data_limits[0] / 2.0 + self.data_limits[1] / 2.0
         span = self.data_limits[1] - self.data_limits[0]
-        z = x - centre
+        z = d - centre
         z = 2 * z / span
-        Phi = np.zeros((x.shape[0], self.num_basis))
+        Phi = np.zeros((d.shape[0], self.num_basis))
         for i in range(self.num_basis):
             Phi[:, i : i + 1] = z**i
         return Phi
@@ -80,7 +80,7 @@ class RadialBasis(BasisFunction):
         super().__init__(num_basis, data_limits, **kwargs)
         self.width = width
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, d: np.ndarray) -> np.ndarray:
         if self.num_basis > 1:
             centres = np.linspace(
                 self.data_limits[0], self.data_limits[1], self.num_basis
@@ -92,10 +92,10 @@ class RadialBasis(BasisFunction):
             if self.width is None:
                 self.width = (self.data_limits[1] - self.data_limits[0]) / 2.0
 
-        Phi = np.zeros((x.shape[0], self.num_basis))
+        Phi = np.zeros((d.shape[0], self.num_basis))
         for i in range(self.num_basis):
             Phi[:, i : i + 1] = np.exp(
-                -0.5 * ((np.asarray(x, dtype=float) - centres[i]) / self.width) ** 2
+                -0.5 * ((np.asarray(d, dtype=float) - centres[i]) / self.width) ** 2
             )
         return Phi
 
@@ -104,14 +104,14 @@ class FourierBasis(BasisFunction):
     def __init__(self, num_basis: int, data_limits: list = None, **kwargs):
         super().__init__(num_basis, data_limits, **kwargs)
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, d: np.ndarray) -> np.ndarray:
         tau = 2 * np.pi
-        Phi = np.ones((x.shape[0], self.num_basis))
+        Phi = np.ones((d.shape[0], self.num_basis))
         for i in range(1, self.num_basis):
             if i % 2:
-                Phi[:, i : i + 1] = np.sin((i + 1) * tau * np.asarray(x, dtype=float))
+                Phi[:, i : i + 1] = np.sin((i + 1) * tau * np.asarray(d, dtype=float))
             else:
-                Phi[:, i : i + 1] = np.cos((i + 1) * tau * np.asarray(x, dtype=float))
+                Phi[:, i : i + 1] = np.cos((i + 1) * tau * np.asarray(d, dtype=float))
         return Phi
 
 
@@ -150,9 +150,9 @@ def construct_data(
     obj : BasisDataConstructor
         Object of the class BasisDataConstructor that contains the data matrix X and the target vector y.
     """
-    x_min = basis_function.data_limits[0]
-    x_max = basis_function.data_limits[1]
-    x = np.linspace(x_min, x_max, num_datapoints)[:, None]
+    d_min = basis_function.data_limits[0]
+    d_max = basis_function.data_limits[1]
+    d = np.linspace(d_min, d_max, num_datapoints)[:, None]
 
     # Draw the parameters for the matrix from a multidimensional normal distribution
     param_vals = np.zeros((draws, len(mean_params)))
@@ -161,10 +161,10 @@ def construct_data(
             [np.random.normal(loc=j, scale=k) for _ in range(draws)]
         )
 
-    obj = BasisDataConstructor(basis_function, param_vals, target_function, x)
+    obj = BasisDataConstructor(basis_function, param_vals, target_function, d)
 
     if plot_results:
-        plt.plot(x, obj.X.T)
+        plt.plot(d, obj.X.T)
         plt.title("Data Generated from Basis Function")
         plt.show()
 
@@ -181,7 +181,7 @@ def construct_y_data(
     targetfun : callable
         Underlying relationship between X and y. This can be any function from R^n -> R^1
         This is also the ideal feature for predicting y and thus the information we would like to discover by applying the lionearization methodology.
-    percentage_range_x_to_t : ndrray, default=[0,1]
+    percentage_range : ndrray, default=[0,1]
         1D array with two elements, the first one being strictly smaller than the second value, both being strcitly between 0 and 1,
         defines the range of input data that shall be used to generate the target function
         The reson behind this is that in process data analytics often a sitation can arise where only a part of the data is relevant to predict the target y

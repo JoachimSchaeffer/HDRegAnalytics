@@ -89,16 +89,16 @@ fl <-
   fusedlasso(
     y_,
     X_,
-    D_step_sparse,
+    6*D_step_sparse,
     gamma = 0,
     minlam = 1e-7,
-    eps = 1e-5,
+    eps = 1e-1,
     rtol = 1e-11,
     # btol = 1e-11
   )
 #, eps = 0.1)#, minlam = 0.000001)
 plot(fl)
-coeff_fused_lasso = coef(fl, lambda = 0.005, exact = T)
+coeff_fused_lasso = coef(fl, lambda = 0.01, exact = T)
 plot(x_parab, coeff_fused_lasso$beta, type = "l")
 # Check the predictions. (put the prediction stuff in a function for easy calling!)
 # Interesting coefficients!

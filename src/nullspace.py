@@ -12,6 +12,7 @@ from plotting_utils import scatter_predictions as scatter_predictions_helper
 from hd_data import HD_Data
 from typing import Union
 from typing import Protocol
+import warnings
 
 
 # source: https://stackoverflow.com/questions/54868698/what-type-is-a-sklearn-model
@@ -42,9 +43,10 @@ class Nullspace:
         self.con_val: float = None
         self.opt_gamma_method: str = None
         self.max_gamma: float = None
+        self.label_dict: dict = None
         # Active data set
         self.X = self.data.X_
-        self.x = self.data.x
+        self.d = self.data.d
         self.y = self.data.y_
         self.std = False
 
@@ -74,7 +76,9 @@ class Nullspace:
                 self.weights[string_id[i] + " std"] = coef_std
                 self.weights[string_id[i] + " std retrans"] = coef_std / self.data.stdx
             except ZeroDivisionError:
-                self.weights[string_id[i] + " std"] = "Undefined Std = 0 for some column"
+                self.weights[
+                    string_id[i] + " std"
+                ] = "Undefined Std = 0 for some column"
                 self.weights[
                     string_id[i] + " std retrans"
                 ] = "Undefined Std = 0 for some column"
@@ -128,7 +132,7 @@ class Nullspace:
     def nullspace_analysis(
         self,
         *,
-        multi_gammas: bool = True,
+        nullspace_path: bool = True,
         con_thres: float = 0.5,
         opt_gamma_method: str = "Xv",
         analyse_objective_trajectory: bool = True,
@@ -136,7 +140,7 @@ class Nullspace:
         save_plot: bool = False,
         path_save: str = "",
         file_name: str = "",
-        ax_labelstr: tuple[str, str] = ("a)", "b)"),
+        **kwargs,
     ) -> Union[Nullspace, tuple[Nullspace, plt.figure, plt.axes]]:
         """Run the nullspace analysis. Make sure to learn/set the relevant weights first."""
 
@@ -144,6 +148,7 @@ class Nullspace:
         self.con_thres = con_thres
         range_y = np.max(self.y) - np.min(self.y)
 
+        # If the value of the constraint is between 0 and -1 use percentage ratio
         if opt_gamma_method == "NRMSE" and self.con_thres < 0:
             nrmse_alpha = (
                 100
@@ -158,10 +163,10 @@ class Nullspace:
             self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
             print("NRMSE constraint threshold: ", self.con_thres)
 
-        self.optimize_gamma(multi_gammas=multi_gammas)
+        self.optimize_gamma(nullspace_path=nullspace_path)
 
         if plot_results:
-            fig, ax = self.plot_nullspace_analysis(ax_labelstr=ax_labelstr)
+            fig, ax = self.plot_nullspace_analysis(**kwargs)
             if save_plot:
                 fig.savefig(path_save + file_name)
 
@@ -220,15 +225,17 @@ class Nullspace:
 
     def optimize_gamma(
         self,
-        multi_gammas: bool = False,
+        nullspace_path: bool = False,
     ) -> None:
         """Optimize the gamma parameter for the nullspace correction."""
         gamma, con_val = self.scipy_opt_gamma(verbose=False)
         self.max_gamma = gamma
         self.con_val = con_val
 
-        if multi_gammas & (type(self.max_gamma) in [np.float64, float, np.float32]):
-            gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
+        if nullspace_path & (type(self.max_gamma) in [np.float64, float, np.float32]):
+            gamma_vals = np.geomspace(
+                10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30
+            )
         else:
             gamma_vals = np.array(self.max_gamma).reshape(1)
 
@@ -301,6 +308,10 @@ class Nullspace:
 
     def scipy_opt_gamma(self, verbose: bool = True) -> float:
         tick = time.time()
+        warnings.warn("Warning: The function optimize gamma is not fully tested yet!")
+        raise NotImplementedError(
+            "The function optimize gamma is not fully tested yet, you have to remove this line for testing it."
+        )
 
         def constraint(x):
             con = self.eval_constraint(x, methods=[self.opt_gamma_method])[
@@ -346,7 +357,9 @@ class Nullspace:
                 100 * mean_squared_error(self.y, y_pred_alpha, squared=False) / span_y
             )
             nrmse_nulls = (
-                100 * mean_squared_error(self.y, y_pred_alpha_v_, squared=False) / span_y
+                100
+                * mean_squared_error(self.y, y_pred_alpha_v_, squared=False)
+                / span_y
             )
             val = np.abs(nrmse_reg - nrmse_nulls) + 100 * np.sqrt(
                 self.X.shape[1]
@@ -434,25 +447,65 @@ class Nullspace:
         self,
         *,
         title: str = "",
-        ax_labelstr: tuple[str, str] = ("a)", "b)"),
+        **kwargs,
     ) -> tuple[plt.figure, plt.axes]:
+        if self.label_dict is None:
+            self.generate_nullspace_labels()
+        if "ax_labelstr" not in kwargs.keys():
+            kwargs["ax_labelstr"] = ("a)", "b)")
         fig, ax = plot_nullspace_analysis(
-            self.w_alpha,
-            self.w_beta,
-            self.nullsp["v_"],
-            self.nullsp["gamma"],
-            self.X,
-            self.x,
-            self.y,
+            w_alpha=self.w_alpha,
+            w_beta=self.w_beta,
+            v=self.nullsp["v_"],
+            X=self.X,
+            d=self.d,
+            y=self.y,
             name=title,
-            coef_name_alpha=self.w_alpha_name,
-            coef_name_beta=self.w_beta_name,
-            max_gamma=self.max_gamma,
-            con_val=self.con_val,
-            method=self.opt_gamma_method,
-            ax_labelstr=ax_labelstr,
+            label_dict=self.label_dict,
+            **kwargs,
         )
         return fig, ax
+
+    def generate_nullspace_labels(self):
+        nrmse_alpha = (
+            100
+            * mean_squared_error(self.y, self.X @ (self.w_alpha), squared=False)
+            / (np.max(self.y) - np.min(self.y))
+        )
+        nrmse_beta = (
+            100
+            * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
+            / (np.max(self.y) - np.min(self.y))
+        )
+        self.label_dict = {}
+        fprecision = 3
+        nrmse_alpha_str = f"NRMSE: {nrmse_alpha:.{fprecision}f}%"
+        nrmse_beta_str = f"NRMSE: {nrmse_beta:.{fprecision}f}%"
+        self.label_dict["alpha"] = f"{self.w_alpha_name}, " + nrmse_alpha_str
+        self.label_dict["alpha pred"] = (
+            r"$\mathbf{X}$" + f"{self.w_alpha_name}, " + nrmse_alpha_str
+        )
+        self.label_dict["beta"] = f"{self.w_beta_name}, " + nrmse_beta_str
+        self.label_dict["beta pred"] = (
+            r"$\mathbf{X}$" + f"{self.w_beta_name}, " + nrmse_beta_str
+        )
+        text_pred = r"$\mathbf{X}($" + self.w_alpha_name + r"$+\mathbf{v}_\gamma)$"
+        text_coef = self.w_alpha_name + r"$+\mathbf{v}_\gamma$"
+        gamma_str = (
+            r"$\gamma\approx$"
+            + f"{dec_sci_switch(self.max_gamma, decimal_switch=1, sci_acc=1)}"
+        )
+        text_nullsp = (
+            # r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
+            ", "
+            + gamma_str
+            + ", "
+            + r"$\Delta_{NRMSE}:$ "
+            + f"{self.con_val:.{fprecision}f}%"
+        )
+        self.label_dict["alpha+v pred"] = text_pred + text_nullsp
+        self.label_dict["alpha+v coef"] = text_coef + text_nullsp
+        self.label_dict["Xv"] = r"$\mathbf{Xv}_\gamma, $" + gamma_str
 
     def scatter_predictions(
         self,
@@ -460,27 +513,33 @@ class Nullspace:
         ax: bool = None,
         return_fig: bool = False,
         ax_labelstr: str = "c)",
-        labels: list[str] = None,
         title: str = "",
+        **kwargs,
     ):
         """Method that scatters based on nullspace correction."""
-
         w = [(self.w_alpha + self.nullsp["v_"][-1, :]), self.w_alpha, self.w_beta]
-        if labels is None:
-            labels = [
-                r"$\mathbf{X}(\beta + \mathbf{v})$",
-                r"$\mathbf{X}\beta$",
-                r"$\mathbf{X}\beta$",
-            ]
+        if self.label_dict is None:
+            self.generate_nullspace_labels()
 
         return scatter_predictions_helper(
             self.X,
             self.y,
             np.mean(self.data.y),
             w,
-            labels,
+            self.label_dict,
             ax=ax,
             return_fig=return_fig,
             ax_labelstr=ax_labelstr,
             title=title,
+            **kwargs,
         )
+
+
+def dec_sci_switch(number: float, decimal_switch: int = 3, sci_acc: int = 2) -> str:
+    """Switch between decimal and scientific notation"""
+    if number < 10 ** (-decimal_switch):
+        return f"{number:.{sci_acc}e}"
+    elif number > 1000:
+        return f"{number:.2e}"
+    else:
+        return f"{number:.{decimal_switch}f}"

@@ -1,4 +1,6 @@
 # Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# NOTE: This is a helper script for making the plots for the associated article.
+# The plots are somewhat customized, there might be the need to adapt these helper functions to your needs.
 import numpy as np
 import pandas as pd  # type: ignore
 import seaborn as sns  # type: ignore
@@ -23,7 +25,7 @@ colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 
 def plot_x_tt2(
     X: np.ndarray,
-    x: np.ndarray,
+    d: np.ndarray,
     ax: plt.axes,
     color: str,
     labelx: str,
@@ -36,7 +38,7 @@ def plot_x_tt2(
         linestyle = kwargs["linestyle"]
     else:
         linestyle = "-"
-    ax.plot(x, X[:, :].T, linestyle, label=label_data, lw=1, color=color, zorder=zorder)
+    ax.plot(d, X[:, :].T, linestyle, label=label_data, lw=1, color=color, zorder=zorder)
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc=3)
@@ -48,7 +50,7 @@ def plot_x_tt2(
 
 def plot_corrheatmap(
     ax: plt.axes,
-    x: np.ndarray,
+    d: np.ndarray,
     X: np.ndarray,
     cmap: cm,
     label: str,
@@ -57,13 +59,13 @@ def plot_corrheatmap(
 ) -> plt.axes:
     if cols:
         X_df = pd.DataFrame(X[:, ::10])
-        x = x[::10]
+        d = d[::10]
     else:
         X_df = pd.DataFrame(X[:, :])
     X_corr = np.abs(X_df.corr())
     if cols:
-        X_corr.set_index(np.round(x, 1), inplace=True)
-        X_corr.set_axis(np.round(x, 1), axis="columns", inplace=True)
+        X_corr.set_index(np.round(d, 1), inplace=True)
+        X_corr.set_axis(np.round(d, 1), axis="columns", inplace=True)
     mask = np.triu(X_corr)
     if cols:
         ax = sns.heatmap(
@@ -269,74 +271,19 @@ def truncate_colormap(
     return new_cmap
 
 
-def format_label(max_gamma: float, con_val: float = -9999, method: str = "") -> str:
-    """Helps with label formatting for the nullspace!
-
-    Parameters
-    ----------
-    max_gamma : float
-        Maximum gamma value, determined by the optimization
-    con_val : float, default=-9999
-        Value of the constraint, default -9999 to make it easy to spot issues
-        corresponding to the respective method
-    method : str, default=''
-        Method used to determine gamma based in the constraint value
-
-    Returns
-    -------
-    label : str
-        Formatted label
-    """
-
-    # Gamma highly depends on the magnitude of the difference of the features/regression coefficients
-    # Thus it is very difficult to interpret.
-    if method == "NRMSE":
-        if con_val <= 10 ** (-12):
-            label = r"$\in\mathcal{\mathbf{N}}(\mathbf{X})$"
-        else:
-            label = (
-                r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
-                + f"{dec_sci_switch(max_gamma, decimal_switch=1, sci_acc=1)}, "
-                + r"$\Delta_{NRMSE}\approx$"
-                + f"{con_val:.2f}%"
-            )
-    elif method == "Xv":
-        label = (
-            r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
-            + f"{dec_sci_switch(max_gamma, decimal_switch=1)}, "
-            + r"$\tilde{n}\approx$"
-            + f"{con_val:.1f}%"
-        )
-
-    return label
-
-
-def dec_sci_switch(number: float, decimal_switch: int = 3, sci_acc: int = 2) -> str:
-    """Switch between decimal and scientific notation"""
-    if number < 10 ** (-decimal_switch):
-        return f"{number:.{sci_acc}e}"
-    elif number > 1000:
-        return f"{number:.2e}"
-    else:
-        return f"{number:.{decimal_switch}f}"
-
-
 def plot_nullspace_analysis(
+    *,
     w_alpha: np.ndarray,
     w_beta: np.ndarray,
     v: np.ndarray,
-    gs: np.ndarray,
     X: np.ndarray,
-    x: np.ndarray,
+    d: np.ndarray,
     y: np.ndarray,
     name: str = "",
-    coef_name_alpha: str = "",
-    coef_name_beta: str = "",
+    label_dict: dict = None,
     return_fig: bool = True,
-    max_gamma: float = -9999,
-    con_val: float = -9999,
-    method: str = "",
     ax_labelstr: tuple[str, str] = ("a)", "b)"),
+    **kwargs,
 ) -> Union[tuple[plt.figure, plt.axes], None]:
     """Plot the nullspace correction"""
     y = y - np.mean(y)
@@ -357,20 +304,30 @@ def plot_nullspace_analysis(
     cmap = truncate_colormap(cm.get_cmap("plasma"), 0.1, 0.7)
     scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cmap)
 
-    figsize = [11, 13]
-    fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex=True)
+    if "layout_type" in kwargs:
+        if kwargs["layout_type"] == "row":
+            figsize = [11, 13]
+            fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex='all')
+        elif kwargs["layout_type"] == "column":
+            figsize = [22, 8]
+            fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+        else:
+            raise ValueError("layout_type must be 'column' or 'row'")
+    else:
+        figsize = [22, 8]
+        fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
 
-    ax[0].plot(x, X[:, :].T, label="Train", lw=1, color=color_list[0])
+    ax[0].plot(d, X[:, :].T, label="Train", lw=1, color=color_list[0])
     ax[0].set_title("Data")
     handles, labels = ax[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax[0].legend(by_label.values(), by_label.keys(), loc=2)
-    ax[0].set_ylabel("y")
+    ax[0].set_ylabel("z")
 
     y_min = ax[0].get_ylim()[0]
     y_max = ax[0].get_ylim()[1]
     ax[0].vlines(0, y_min, y_max, colors="k", linestyles="solid", linewidths=0.8)
-    ax[0].hlines(0, min(x), max(x), colors="k", linestyles="solid", linewidths=0.8)
+    ax[0].hlines(0, min(d), max(d), colors="k", linestyles="solid", linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
     trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
     ax[0].text(
@@ -384,76 +341,71 @@ def plot_nullspace_analysis(
         fontfamily="monospace",
     )
 
-    # Initializing the nrmse error to 2, makes it easy to spot issues
-    nrmse = 2 * np.ones(v.shape[0])
-    for i in range(v.shape[0]):
-        nrmse[i] = mean_squared_error(y, X @ (w_alpha + v[i, :]), squared=False) / (
-            np.max(y) - np.min(y)
-        )
-        ax[1].plot(
-            x,
-            w_alpha + v[i, :],
-            color=scalarMap.to_rgba(100 * nrmse[i]),
-            zorder=i,
-            linewidth=0.5,
-            # linestyle=(0, (1, 2)),
-        )
-
     # markevery = int(len(x) / 15)
-    nrmse_alpha = (
-        100
-        * mean_squared_error(y, X @ (w_alpha), squared=False)
-        / (np.max(y) - np.min(y))
-    )
-    nrmse_beta = (
-        100 * mean_squared_error(y, X @ (w_beta), squared=False) / (np.max(y) - np.min(y))
-    )
-
-    coef_alpha_label = f"{coef_name_alpha}, NRMSE: {nrmse_alpha:.3f}%"
-    coef_beta_label = f"{coef_name_beta}, NRMSE: {nrmse_beta:.3f}%"
     ax[1].plot(
-        x,
+        d,
         w_alpha,
-        label=coef_alpha_label,
+        label=label_dict["alpha"],
         color="darkgreen",
         linewidth=2.5,
         zorder=v.shape[0] + 1,
     )
+
+    nrmse = -9999 * np.ones(v.shape[0])
+    for i in range(v.shape[0]):
+        nrmse[i] = mean_squared_error(y, X @ (w_alpha + v[-i, :]), squared=False) / (
+            np.max(y) - np.min(y)
+        )
+        if i == 0:
+            label = label_dict["alpha+v coef"]
+        else:
+            label = None
+        ax[1].plot(
+            d,
+            w_alpha + v[-i, :],
+            color=scalarMap.to_rgba(100 * nrmse[i]),
+            zorder=i,
+            linewidth=2.5,
+            label=label,
+            # linestyle=(0, (1, 2)),
+        )
+
     ax[1].plot(
-        x,
+        d,
         w_beta,
-        label=coef_beta_label,
+        label=label_dict["beta"],
         color="k",
-        linewidth=5,
-        zorder=-10,
+        linewidth=2.5,
+        zorder=2,
         # linestyle=(0, (6, 4)),
     )
 
-    label = format_label(max_gamma, con_val=con_val, method=method)
+    # label = format_label(max_gamma, con_val=con_val, method=method)
+    # Comment out if you want to plot the vector v
+    # ax[1].plot(
+    #    d,
+    #    v[-1, :],
+    #    label="v",
+    #    color="darkgrey",
+    #    zorder=-1,
+    #    linestyle=(0, (2, 4)),
+    # )
 
-    ax[1].plot(
-        x,
-        v[-1, :],
-        label="v",
-        color="darkgrey",
-        zorder=-1,
-        linestyle=(0, (2, 4)),
-    )
-
-    ax[1].set_xlabel("x")
+    ax[1].set_xlabel("d")
     ax[1].set_ylabel("Coefficients")
 
     # Set bottom and left spines as x and y axes of coordinate system
     y_min = ax[1].get_ylim()[0]
     y_max = ax[1].get_ylim()[1]
-    ax[1].vlines(0, y_min, y_max, colors="k", linestyles="solid", linewidths=0.8)
-    ax[1].hlines(0, min(x), max(x), colors="k", linestyles="solid", linewidths=0.8)
+    # ax[1].vlines(0, y_min, y_max, colors="k", linestyles="solid", linewidths=0.8)
+    # ax[1].hlines(0, min(x), max(x), colors="k", linestyles="solid", linewidths=0.8)
 
-    ax[0].set_xlim(min(x), max(x))
+    ax[0].set_xlim(min(d), max(d))
+    ax[1].set_xlim(min(d), max(d))
     ax[1].set_ylim(y_min, y_max)
     ax[1].set_title("Nullspace Perspective")
     ax[1].text(
-        0.0,
+        -0.04,
         1.0,
         ax_labelstr[1],
         transform=ax[1].transAxes + trans,
@@ -466,8 +418,8 @@ def plot_nullspace_analysis(
     cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
     cb.set_label(r"NRMSE (%)", labelpad=10)
 
-    ax[0].grid()
-    ax[1].grid()
+    ax[0].grid(zorder=1)
+    ax[1].grid(zorder=1)
     ax[1].legend(loc=2)
     fig.suptitle(name)
     if return_fig:
@@ -479,7 +431,7 @@ def plot_nullspace_analysis(
 
 def plot_X(
     X: np.ndarray,
-    x: np.ndarray,
+    d: np.ndarray,
     ax0_title: str = "Training Data",
     ax1_title: str = "Z-Scored",
 ) -> tuple[plt.figure, plt.axes]:
@@ -491,20 +443,20 @@ def plot_X(
     color_list = ["#0051a2", "#97964a", "#f4777f", "#93003a"]
     figsize = [11, 13]
     fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex=True)
-    ax[0].plot(x, X_.T, label="Train", lw=1, color=color_list[0])
+    ax[0].plot(d, X_.T, label="Train", lw=1, color=color_list[0])
     ax[0].set_title(ax0_title)
     handles, labels = ax[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax[0].legend(by_label.values(), by_label.keys(), loc=2)
     ax[0].set_ylabel(r"$\Delta \widetilde{Q}_{100-10}$ (Ah)")
 
-    ax[1].plot(x, X_std.T, label="Train", lw=1, color=color_list[0])
+    ax[1].plot(d, X_std.T, label="Train", lw=1, color=color_list[0])
     ax[1].set_title(ax1_title)
     handles, labels = ax[1].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax[1].legend(by_label.values(), by_label.keys(), loc=2)
     ax[1].set_ylabel(r"$\Delta \widetilde{Q}_{100-10}^{std}$")
-    ax[1].set_xlim(min(x), max(x))
+    ax[1].set_xlim(min(d), max(d))
     ax[1].set_xlabel("Voltage (V)")
     return fig, ax
 
@@ -514,17 +466,18 @@ def scatter_predictions(
     y_: np.ndarray,
     y_mean: np.ndarray,
     w: list,
-    labels: list,
+    label_dict: dict,
     title: str = "",
     ax: plt.axes = None,
     return_fig: bool = False,
     ax_labelstr: str = "",
+    **kwargs,
 ) -> Union[tuple[plt.figure, plt.axes], None]:
     """Method that scatter plots the predictions associated with different regression coefficients."""
 
     colors = ["#000000", "#648fff", "#dc267f", "#785ef0", "#fe6100", "#ffb000"]
     # ['#332288', '#117733', '#44AA99', '#88CCEE', '#DDCC77', '#CC6677', '#AA4499', '#882255']
-    markers = ["<", "v", "^", "o"]
+    # markers = ["<", "v", "^", "o"]
 
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(7, 7))
@@ -534,60 +487,99 @@ def scatter_predictions(
     y = y_ + y_mean
     y_pred = []
     nrmse_ = []
-    for i, (w_, label) in enumerate(zip(w, labels)):
+    for i, w_ in enumerate(w):
         y_pred.append((X @ w_) + y_mean)
         nrmse_.append(nrmse(y, y_pred[i]))
 
     # Make a twinx axis
     ax_twinx = ax.twinx()
-    ax_twinx.spines["right"].set_position(("axes", 1.15))
-    ax_twinx.set_ylabel(r"$y-\hat{y}$")
+    ax_twinx.spines["right"].set_position(("axes", 1))
 
-    # Scatter the prediction differences of beta_a and beta_a + v
+    ax_twinx.set_ylabel(r"$\Delta y$")
+
+    if "y_coords" in kwargs:
+        ax_twinx.yaxis.set_label_coords(kwargs["y_coords"][0], kwargs["y_coords"][1])
+    # Double the range of the y-axis
+    ax_twinx.set_ylim(
+        2 * np.max(y_pred[0] - y_pred[1]),
+        4 * np.min(y_pred[0] - y_pred[1]),
+    )
+    cid = 4
+    # Scatter the prediction differences of beta_a and beta_a + v, i.e. Xv
     ax_twinx.scatter(
         y,
         y_pred[0] - y_pred[1],
-        label=f"{labels[0]}",
+        label=label_dict["Xv"],
         marker="s",
-        alpha=0.5,
-        color=colors[5],
+        alpha=0.4,
+        color=colors[cid],
+        zorder=1,
     )
+
+    ax_twinx.yaxis.label.set_color(colors[cid])
+    ax_twinx.spines["right"].set_edgecolor(colors[cid])
+    ax_twinx.tick_params(axis="y", colors=colors[cid])
+    ax_twinx.get_yaxis().get_offset_text().set_position((1.14, 1.14 - 0.1))
+    # location bottom right corner
+    ax_twinx.legend(loc=4, frameon=False)
+    # make background white
+    fig.patch.set_facecolor("white")
 
     # Scatter the predictions of beta_a
     ax.scatter(
         y,
         y_pred[0],
-        label=f"{labels[0]}, NRMSE: {nrmse_[0]:.2f}%",
-        s=150,
+        label=label_dict["alpha+v pred"],
+        s=300,
+        lw=1.5,
         facecolors="none",
-        linestyle=(2, (2, 4)),
+        linestyle=(15, (10, 10)),
         edgecolors=colors[0],
+        zorder=2,
     )
 
     # Scatter the predictions of beta_a + v
     ax.scatter(
         y,
         y_pred[1],
-        label=f"{labels[1]}, NRMSE: {nrmse_[1]:.2f}%",
-        s=150,
+        label=label_dict["alpha pred"],
+        s=300,
+        lw=1.5,
         facecolors="none",
-        linestyle=(0, (4, 6)),
-        edgecolors=colors[1],
+        linestyle=(5, (10, 10)),
+        edgecolors=colors[2],
+        zorder=3,
     )
 
     # Scatter the predcitions of bete_b
     ax.scatter(
         y,
         y_pred[2],
-        label=f"{labels[2]}, NRMSE: {nrmse_[2]:.2f}%",
-        s=5,
-        facecolors=colors[2],
-        edgecolors=colors[2],
+        label=label_dict["beta pred"],
+        s=20,
+        facecolors=colors[3],
+        edgecolors=colors[3],
+        zorder=4,
     )
 
     ax.set_xlabel(r"$y$")
     ax.set_ylabel(r"$\hat{y}$")
     ax.set_title(title)
+
+    # ax.set_xlim(factor * min(y), factor * max(y))
+    # ax.set_ylim(factor * min(y), factor * max(y))
+    # set axis ratio equal
+    ax.set_aspect("equal")
+    # get axis limits
+    x_min, x_max = ax.get_xlim()
+    ax_twinx.plot(
+        [x_min, x_max],
+        [0, 0],
+        alpha=0.4,
+        color=colors[cid],
+        zorder=1,
+    )
+    ax.set_xlim(x_min, x_max)
 
     trans = mtransforms.ScaledTranslation(-50 / 72, 5 / 72, fig.dpi_scale_trans)
     ax.text(
@@ -615,8 +607,8 @@ def plot_snr_analysis(
     snr_power: np.ndarray,
     noise_power: np.ndarray,
     *,
-    x_label: str = "Continous Domain, x",
-    x: np.ndarray = None,
+    x_label: str = "Continous Domain, d",
+    d: np.ndarray = None,
     s: float = None,
     title: str = "SNR Analysis, Bspline",
 ):
@@ -626,8 +618,8 @@ def plot_snr_analysis(
     Some code from here : https://stackoverflow.com/questions/20356982/matplotlib-colour-multiple-twinx-axes
     """
     snr = 10 * np.log10(snr_power)
-    if x is None:
-        x = np.arange(X.shape[1])
+    if d is None:
+        d = np.arange(X.shape[1])
     abs_x_mean = np.abs(X.mean(axis=0).T)
     std_x = X.std(axis=0).T
     fig, ax = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
@@ -638,11 +630,11 @@ def plot_snr_analysis(
     offset = 1.15
     ax0_1_twinx.spines["right"].set_position(("axes", offset))
 
-    ax[0].plot(x, snr, lw=1.5, color="k")
+    ax[0].plot(d, snr, lw=1.5, color="k")
     ax[0].set_ylabel("SNR [dB]")
-    (snr_par,) = ax0_0_twinx.plot(x, snr_power, lw=1.5, color=colors_IBM[0])
+    (snr_par,) = ax0_0_twinx.plot(d, snr_power, lw=1.5, color=colors_IBM[0])
     ax0_0_twinx.set_ylabel("SNR")
-    (noise_par,) = ax0_1_twinx.plot(x, noise_power, lw=1.5, color=colors_IBM[3])
+    (noise_par,) = ax0_1_twinx.plot(d, noise_power, lw=1.5, color=colors_IBM[3])
     ax0_1_twinx.set_ylabel("Noise Power")
     ax0_1_twinx.get_yaxis().get_offset_text().set_position((offset, offset - 0.1))
 
@@ -653,9 +645,9 @@ def plot_snr_analysis(
 
     # Mean, and std plot of the data
     ax1_twinx = ax[1].twinx()
-    ax[1].plot(x, abs_x_mean, label="Mean", lw=1.5, color="k")
+    ax[1].plot(d, abs_x_mean, label="Mean", lw=1.5, color="k")
     ax[1].set_ylabel(r"$\overline{X}$")
-    (std_,) = ax1_twinx.plot(x, std_x, label="Std.", lw=1.5, color=colors_IBM[0])
+    (std_,) = ax1_twinx.plot(d, std_x, label="Std.", lw=1.5, color=colors_IBM[0])
     ax1_twinx.set_ylabel(r"$\sigma$")
     ax[1].set_xlabel(x_label)
 
@@ -663,16 +655,16 @@ def plot_snr_analysis(
     # ax_2_twinx = ax[2].twinx()
     # ax2_1_twinx = ax[2].twinx()
     # ax2_1_twinx.spines["right"].set_position(("axes", 1.15))
-    # ax[2].plot(x, std_x / snr, lw=1.5, color="k")
+    # ax[2].plot(d, std_x / snr, lw=1.5, color="k")
     # Logscale
     # ax[2].set_yscale("log")
     # ax[2].set_ylabel(r"SNR/$\sigma$")
-    # (std_ratio,) = ax_2_twinx.plot(x, 1 / snr, lw=1.5, color=colors_IBM[0])
+    # (std_ratio,) = ax_2_twinx.plot(d, 1 / snr, lw=1.5, color=colors_IBM[0])
 
     # ax_2_twinx.set_ylabel(r"SNR/$\sigma$ (constant variance)")
     # ax[2].set_xlabel(x_label)
     # (snr_scale_,) = ax2_1_twinx.plot(
-    #    x, snr_power / snr_power, lw=1.5, color=colors_IBM[3]
+    #    d, snr_power / snr_power, lw=1.5, color=colors_IBM[3]
     # )
 
     twinx_list = [ax0_0_twinx, ax0_1_twinx, ax1_twinx]
@@ -688,7 +680,7 @@ def plot_snr_analysis(
     # make background white
     fig.patch.set_facecolor("white")
 
-    ax[0].set_xlim(x[0], x[-1])
+    ax[0].set_xlim(d[0], d[-1])
     plt.tight_layout()
 
     plt.show()
