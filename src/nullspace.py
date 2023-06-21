@@ -152,9 +152,16 @@ class Nullspace:
             self.max_gamma = np.max(kwargs["gamma_vals"])
             # drop the key from the dictionary
             kwargs.pop("gamma_vals")
-            cons_dict = self.eval_constraint(self.max_gamma, methods=self.opt_gamma_method)
+            cons_dict = self.eval_constraint(
+                self.max_gamma, methods=self.opt_gamma_method
+            )
             self.con_val = cons_dict[self.opt_gamma_method]
             print(f"Constraint value: {self.con_val:.12f}")
+            (
+                self.nullsp["v_"],
+                self.nullsp["norm_"],
+                self.nullsp["gamma"],
+            ) = self.nullspace_calc(gs=self.max_gamma)
         else:
             # If the value of the constraint is between 0 and -1 use percentage ratio
             if opt_gamma_method == "NRMSE" and self.con_thres < 0:
@@ -168,7 +175,9 @@ class Nullspace:
                     * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
                     / range_y
                 )
-                self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
+                self.con_thres = np.abs(self.con_thres) * np.abs(
+                    nrmse_alpha - nrmse_beta
+                )
                 print("NRMSE constraint threshold: ", self.con_thres)
 
             self.optimize_gamma(nullspace_path=nullspace_path)
@@ -318,7 +327,9 @@ class Nullspace:
     def scipy_opt_gamma(self, verbose: bool = True) -> float:
         tick = time.time()
         if self.opt_gamma_method == "Xv":
-            warnings.warn("Warning: The function scipy optimize gamma is not fully tested yet for Xv cosntraints!")
+            warnings.warn(
+                "Warning: The function scipy optimize gamma is not fully tested yet for Xv cosntraints!"
+            )
             raise NotImplementedError(
                 "The function optimize gamma is not fully tested yet for Xv constraints, you have to remove this line for testing it."
             )
