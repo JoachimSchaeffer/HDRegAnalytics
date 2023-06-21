@@ -3,6 +3,13 @@
 # 2. Regression coefficient variance estimation
 # Copyright: Joachim Schaeffer joachim.schaeffer@posteo.de
 
+# CLEAN UP
+rm(list = ls()) # Clear packages
+p_unload(all)  # Unload add-ons
+dev.off()  # Clear all plots
+cat("\014")  # Clear console
+# Clear mind :)
+
 ## Packages
 pacman::p_load(pacman,
                MASS,
@@ -20,16 +27,17 @@ path_base <-
 source(paste(path_base, "src/utils.R", sep = ""))
 
 ## Load Data
-path <- paste(path_base, "data/dml_parab_n.csv", sep = "")
-parab_data = import(path, skip = 1)
+path <- paste(path_base, "data/poly_hd_data_n.csv", sep = "")
+parab_data = import(path, skip = 16)
 ## Construct Data Matrices
-X <- unname(as.matrix(parab_data[, 1:200]))
+p = 201
+X <- unname(as.matrix(parab_data[, 1:p]))
 X_list <- centerXtrain(X)
 X_ = X_list$X_
-y <-  parab_data[, 201]
+y <-  unname(parab_data[, (p+1)])
 y_list <- standardize_y_train(y)
 y_ <- y_list$y_std
-x_parab <-  seq(1, 3, length.out = 200)
+x_parab <-  seq(1, 3, length.out = p)
 
 ## Data Visualization
 matplot(
@@ -55,7 +63,7 @@ fit <- glmnet(
   excact = T,
 )
 plot(fit)
-matplot(x_parab, coef(fit, s = 1)[2:201, ],  type = "l")
+matplot(x_parab, coef(fit, s = 1)[2:(p+1),],  type = "l")
 
 cvfit <-
   cv.glmnet(X_,
@@ -68,7 +76,7 @@ cvfit$lambda.min
 cvfit$lambda.1se
 plot(
   x_parab,
-  coef(cvfit, s = "lambda.1se", excact = T)[2:201, ],
+  coef(cvfit, s = "lambda.1se", excact = T)[2:(p+1),],
   type = 'l',
   ylab = "",
   xlab = ""
@@ -81,21 +89,21 @@ plot(
 # Try fused lasso (1D Fused Lasso)
 # First we have to define the Matrix D
 x <-
-  c(rep(0, dim(X_)[2] - 2), 1, -1, rep(0, dim(X_)[2] - 1))
-D_step <- toeplitz2(x, 200, 200)
+  c(rep(0, p - 2), 1,-1, rep(0, p - 1))
+D_step <- toeplitz2(x, p, p)
 D_step_sparse <- as(D_step, "sparseMatrix")
-
+rm(fl)
 fl <-
   fusedlasso(
     y_,
     X_,
-    6*D_step_sparse,
-    gamma = 0,
-    minlam = 1e-7,
-    eps = 1e-1,
-    rtol = 1e-11,
-    # btol = 1e-11
+    D_step_sparse,
+    eps = 0.001,
+    gamma = 0.1,
+    minlam = 1e-5,
+    rtol = 1e-14,
   )
+# btol = 1e-11
 #, eps = 0.1)#, minlam = 0.000001)
 plot(fl)
 coeff_fused_lasso = coef(fl, lambda = 0.01, exact = T)
@@ -104,74 +112,6 @@ plot(x_parab, coeff_fused_lasso$beta, type = "l")
 # Interesting coefficients!
 lambda_val <- 0.005
 y_pred <- predict(fl, lambda = lambda_val, Xnew = X_)$fit
-plot_predictions(y_train,
-                 y_pred,
-                 y_test1,
-                 y_pred_test1,
-                 y_test2,
-                 y_pred_test2,
-                 y_list)
-# TBH: Pretty neat results. It struggles for the long lived cells, but that's well known.
-
-x <-
-  c(rep(0, dim(X_train)[2] - 3), 0.5, -1, 0.5, rep(0, dim(X_train)[2] - 1))
-D_p2 <- toeplitz2(x, 1000, 1000)
-D_p2_sparse <- as(D_p2, "sparseMatrix")
-# Its important to make sure that the the rowsum is 1 // that the toeplitz matirx
-# is rescaled. Need to build some more intuition aroud how this actually works.
-fl_p2 <-
-  fusedlasso(y_,
-             X_,
-             D_p2_sparse,
-             gamma = 0.1,
-             minlam = 1e-7,)
-
-coeff_fused_lasso = coef(fl_p2, lambda = 0.001)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
-lambda_val <- 0.0001
-y_pred <- predict(fl_p2, lambda = lambda_val, Xnew = X_)$fit
-y_pred_test1 <-
-  predict(fl_p2, lambda = lambda_val, Xnew = X_test1_)$fit
-y_pred_test2 <-
-  predict(fl_p2, lambda = lambda_val, Xnew = X_test2_)$fit
-plot_predictions(y_train,
-                 y_pred,
-                 y_test1,
-                 y_pred_test1,
-                 y_test2,
-                 y_pred_test2,
-                 y_list)
-
-# x <- c(rep(0, dim(X_train)[2]-4), 1, -3, -3, 1, rep(0, dim(X_train)[2]-1))
-# D_p3 <- toeplitz2(x, 1000, 1000)
-# D_p3_sparse <- as(D_p3, "sparseMatrix")
-# fl_p3 <-  genlasso(y_, X_, D_p3_sparse)
-
-# Rerun with standardization.\
-# Large gamma will converge toward classical lasso as the lasso penalizatoin
-# is more important.
-# gamma = lasso_lambda/gamma_lambda
-# When standardized, it's can be benefifical for this data to move away from the lasso
-# increase eps to push it towards en/rr.
-X_std = as.matrix(scale(data.frame(X_)))
-fl_std_step <-
-  fusedlasso(
-    y_,
-    X_std,
-    D_step_sparse,
-    gamma = 1,
-    minlam = 1e-4,
-    eps = 1,
-    rtol = 1e-11,
-  )
-plot(fl_std_step)
-# matplot(t(X_std), type='l')
-coeff_fused_lasso = coef(fl_std_step, lambda = 0.1)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
-# --> Standardization blowing up the noise.
-# Can still be helpful. but smart rescaling is better.
-# Something weird in here, but ignore for now.
-
 
 # CV
 # CV for chosing the EN parameter might not be trivial because lambdas will be different.
@@ -183,7 +123,7 @@ plot(x_lfp, coeff_fused_lasso$beta, type = "l")
 # https://stats.stackexchange.com/questions/198361/why-i-am-that-unsuccessful-with-predicting-with-generalized-lasso-genlasso-gen
 
 nfolds <- 10 # Debugging, increase to 10
-eps_seq <- logseq(10 ^ -5, 1, n = 30)
+eps_seq <- logseq(10 ^ -3, 1, n = 30)
 n_eps <- length(eps_seq)
 eps_ <- mean(eps_seq)
 N <- nrow(X_)
@@ -194,7 +134,7 @@ fusedlasso.fit <- fusedlasso(
   X_,
   D_step_sparse,
   gamma = 0,
-  minlam = 1e-5,
+  minlam = 1e-7,
   eps = eps_,
   rtol = 1e-11,
 )
@@ -205,7 +145,7 @@ for (i in 1:n_eps) {
     tapply(seq_along(foldid), foldid, function(fold.indices) {
       fold.fusedlasso.fit <- fusedlasso(
         y_[-fold.indices],
-        X_[-fold.indices, ],
+        X_[-fold.indices,],
         D_step_sparse,
         gamma = 0,
         minlam = 1e-5,
@@ -218,7 +158,7 @@ for (i in 1:n_eps) {
       fold.fusedlasso.preds <- predict(fold.fusedlasso.fit,
                                        lambda = fl$lambda,
                                        #$
-                                       Xnew = X_[fold.indices, ])$fit #$
+                                       Xnew = X_[fold.indices,])$fit #$
       lambda.losses <-
         sqrt(colMeans((fold.fusedlasso.preds - y_[fold.indices]) ^ 2))
       return (lambda.losses)
@@ -232,9 +172,9 @@ cv.lambda.losses_sd <-
 
 for (i in 1:n_eps) {
   disp(i)
-  cv.lambda.losses_mean[i, ] <-
+  cv.lambda.losses_mean[i,] <-
     colMeans(do.call(rbind, fold.lambda.losses[[i]]))
-  cv.lambda.losses_sd[i, ] <-
+  cv.lambda.losses_sd[i,] <-
     colStdevs(do.call(rbind, fold.lambda.losses[[i]]))
 }
 
@@ -259,72 +199,3 @@ coeff_fused_lasso = coef(fl , lambda = lampba_min_loss)
 plot(x_lfp, coeff_fused_lasso$beta, type = "l")
 ## Predict:
 y_pred <- predict(fl, lambda = lampba_min_loss, Xnew = X_)$fit
-y_pred_test1 <-
-  predict(fl, lambda = lampba_min_loss, Xnew = X_test1_)$fit
-y_pred_test2 <-
-  predict(fl, lambda = lampba_min_loss, Xnew = X_test2_)$fit
-plot_predictions(y_train,
-                 y_pred,
-                 y_test1,
-                 y_pred_test1,
-                 y_test2,
-                 y_pred_test2,
-                 y_list)
-
-## Test the SNR rescaled data (we don't expect a large benefit here!)
-# Lambda 10 + eps 1e-4: Awesome!
-#
-lfp_snr_smooth_dB <-
-  import(paste(path_base, "HDFeat/data/lfp_snr_smooth_dB.csv", sep = ""))
-mean_sd_list <- mean_sd_fused_lasso(X_train)
-sd <- mean_sd_list$sd
-lfp_snr_smooth_dB <-
-  (lfp_snr_smooth_dB - min(lfp_snr_smooth_dB) + 1e-4) / (max(lfp_snr_smooth_dB) -
-                                                           min(lfp_snr_smooth_dB))
-
-scale_factor_snr_db <- as.matrix(sd / (lfp_snr_smooth_dB))
-
-X_snr_ <-
-  scale(X_train, mean_sd_list$mean, scale_factor_snr_db)
-X_test1_snr_ <-
-  scale(X_test1, mean_sd_list$mean, scale_factor_snr_db)
-X_test2_snr_ <-
-  scale(X_test2, mean_sd_list$mean, scale_factor_snr_db)
-
-fl <-
-  fusedlasso(
-    y_,
-    X_snr_,
-    D_step_sparse,
-    gamma = 0,
-    minlam = 1e-7,
-    eps = 0.1,
-    rtol = 1e-11,
-    # btol = 1e-11
-  )
-#, eps = 0.1)#, minlam = 0.000001)
-plot(fl)
-coeff_fused_lasso = coef(fl, lambda = 1, exact = T)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
-# Check the predictions. (put the prediction stuff in a function for easy calling!)
-# Interesting coefficients!
-lambda_val <- 1
-y_pred <- predict(fl, lambda = lambda_val, Xnew = X_snr_)$fit
-y_pred_test1 <-
-  predict(fl, lambda = lambda_val, Xnew = X_test1_snr_)$fit
-y_pred_test2 <-
-  predict(fl, lambda = lambda_val, Xnew = X_test2_snr_)$fit
-plot_predictions(y_train,
-                 y_pred,
-                 y_test1,
-                 y_pred_test1,
-                 y_test2,
-                 y_pred_test2,
-                 y_list)
-
-# CLEAN UP
-rm(list = ls()) # Clear packages
-p_unload(all)  # Unload add-ons
-dev.off()  # Clear all plots
-cat("\014")  # Clear console
-# Clear mind :)

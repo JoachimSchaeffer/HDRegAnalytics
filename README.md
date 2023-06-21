@@ -12,6 +12,8 @@ Example notebooks:
 
 - [nullspace_methodology_example.ipynb](nullspace_methodology_example.ipynb).
 
+All other noteboos (mostly FEATLIN in the name) are associated with other work and are currently most likely not functional and need to be fixed and cleaned! Please ignore them! 
+
 ## LFP Data Files
 
 The measurement data is contained in the file [lfp_slim.csv](lfp_slim.csv) and the corresposning license for this data is [lfp_datalicense.txt](lfp_datalicense.txt).

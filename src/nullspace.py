@@ -237,7 +237,7 @@ class Nullspace:
         ax2.set_yscale("log")
         ax.legend(loc="lower left")
         ax2.legend(loc="upper right")
-        fig.savefig("NRMSE_Xv.pdf")
+        # fig.savefig("NRMSE_Xv.pdf")
         fig.show()
 
     def optimize_gamma(

@@ -313,9 +313,11 @@ def plot_nullspace_analysis(
             fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
         else:
             raise ValueError("layout_type must be 'column' or 'row'")
+        layout_type = kwargs["layout_type"]
     else:
         figsize = [22, 8]
         fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
+        layout_type = "column"
 
     ax[0].plot(d, X[:, :].T, label="Train", lw=1, color=color_list[0])
     ax[0].set_title("Data")
@@ -360,7 +362,7 @@ def plot_nullspace_analysis(
             label = label_dict["alpha+v coef"]
         else:
             label = None
-        ax[1].plot(
+        p_nulls = ax[1].plot(
             d,
             w_alpha + v[-i, :],
             color=scalarMap.to_rgba(100 * nrmse[i]),
@@ -390,7 +392,9 @@ def plot_nullspace_analysis(
     #    zorder=-1,
     #    linestyle=(0, (2, 4)),
     # )
-
+    if layout_type == "column":
+        ax[0].set_xlabel("d")
+        ax[0].set_ylabel("z")
     ax[1].set_xlabel("d")
     ax[1].set_ylabel("Coefficients")
 
@@ -414,9 +418,12 @@ def plot_nullspace_analysis(
         fontweight="bold",
         fontfamily="monospace",
     )
-
-    cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
-    cb.set_label(r"NRMSE (%)", labelpad=10)
+    if v.shape[0] > 1:
+        cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
+        cb.set_label(r"NRMSE (%)", labelpad=10)
+    else:
+        # Set color of p_nulls to black
+        p_nulls[0].set_color(colors_IBM[2])
 
     ax[0].grid(zorder=1)
     ax[1].grid(zorder=1)
@@ -480,7 +487,7 @@ def scatter_predictions(
     # markers = ["<", "v", "^", "o"]
 
     if ax is None:
-        fig, ax = plt.subplots(1, 1, figsize=(7, 7))
+        fig, ax = plt.subplots(1, 1, figsize=(8.3, 8.3))
     else:
         fig = ax.get_figure()
 
@@ -595,6 +602,13 @@ def scatter_predictions(
 
     legend_fontsize = matplotlib.rcParams["legend.fontsize"]
     ax.legend(frameon=True, fontsize=legend_fontsize - 1.5, loc=2).set_zorder(1)
+
+    if "save_plot" in kwargs:
+        if kwargs["save_plot"]:
+            fig.savefig(
+                f"{kwargs['path_save']}Scatter_predictions_{kwargs['file_name']}.pdf",
+                bbox_inches="tight",
+            )
 
     if return_fig:
         return fig, ax
