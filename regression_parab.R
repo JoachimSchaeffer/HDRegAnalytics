@@ -1,12 +1,12 @@
-# Script for, testing and debugging.
-# 1. Testing different regression methods
-# 2. Regression coefficient variance estimation
+# Script for Fused Lasso on the Parabola Exmaple
+# Using the genlasso function from the genlasso package.
+# (Alternatively, fusedlasso vcould be used as well)
 # Copyright: Joachim Schaeffer joachim.schaeffer@posteo.de
 
 # CLEAN UP
-rm(list = ls()) # Clear packages
-p_unload(all)  # Unload add-ons
-dev.off()  # Clear all plots
+rm(list = ls()) # Clear packagess
+tryCatch(p_unload(all), error=function(e){print("Skip clearing plots, probably no addons!")})  # Unload add-ons
+tryCatch(dev.off(), error=function(e){print("Skip clearing plots, probably no plots!")})  # Clear all plots
 cat("\014")  # Clear console
 # Clear mind :)
 
@@ -45,8 +45,8 @@ matplot(
   t(X_),
   type = "l",
   ylab = "z",
-  xlab = "x",
-  main = "Prabolas with Noise"
+  xlab = "d",
+  main = "Parabolas with Noise"
 )
 
 # REGRESSION SECTION
@@ -65,29 +65,27 @@ fit <- glmnet(
 plot(fit)
 matplot(x_parab, coef(fit, s = 1)[2:(p + 1),],  type = "l")
 
-cvfit <-
+cvfit_rr <-
   cv.glmnet(X_,
             y_,
             alpha = 0,
             lambda = lambda_seq,
             standardize = F)
-plot(cvfit)
-cvfit$lambda.min
-cvfit$lambda.1se
+plot(cvfit_rr)
+
 plot(
   x_parab,
-  coef(cvfit, s = "lambda.1se", excact = T)[2:(p + 1),],
+  coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1),],
   type = 'l',
   ylab = "",
   xlab = ""
 )
 
-# Calculate stats on tests sets
-# y_pred <- predict(cvfit, X_, s = cvfit$lambda.1se)
-# plot_predictions(y_, y_pred, y_list)
+# Predictions!
+y_pred <- predict(cvfit_rr, X_, s = cvfit_rr$lambda.1se)
+plot_one_set_predictions(y, y_pred, y_list)
 
-# Try fused lasso (1D Fused Lasso)
-# First we have to define the Matrix D
+# Fused Lasso (1D Fused Lasso)
 x <-
   c(rep(0, p - 2), 1,-1, rep(0, p - 1))
 D_step <- toeplitz2(x, p, p)
@@ -99,7 +97,12 @@ fl <-
 plot(fl)
 lambda_val <- 0.05
 coeff_fused_lasso = coef(fl, lambda = lambda_val, exact = T)
-plot(x_parab, coeff_fused_lasso$beta * y_list$std, type = "l")
+plot(
+  x_parab,
+  coeff_fused_lasso$beta * y_list$std,
+  type = "l",
+  ylim = c(0.001, 0.008)
+)
 # Check the predictions. (put the prediction stuff in a function for easy calling!)
 # Interesting coefficients!
 y_pred <- predict(fl, lambda = lambda_val, Xnew = X_)$fit
@@ -143,36 +146,45 @@ cv.genlasso.lambda.min <-
   genlasso.fit$lambda[which.min(cv.lambda.losses)]
 
 
-## Predict:
-cv.genlasso.lambda.min.pred <- predict(genlasso.fit,
-                                       lambda = cv.genlasso.lambda.min,
-                                       Xnew = cbind(1,test.x))$fit #$
-
 # Pick the best!
 lambda_min_loss <-
   fl$lambda[which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)]
-# Print! 
-print("Min Loss CV")
+# Print!
+print("Min Lambda CV")
 print(lambda_min_loss)
 
 # Pick the best with 1se
-loss_larger_than_1se <- cv.lambda.losses > (std(cv.lambda.losses) + min(cv.lambda.losses))
+loss_larger_than_1se <-
+  cv.lambda.losses > (std(cv.lambda.losses) + min(cv.lambda.losses))
 # In this idealized examaple, all but one are within the 1se.
 # --> Basically all somewhat reasonable lambdas will do great.
 id_1se <- min(which(loss_larger_than_1se == FALSE))
-lambda_dl_cv_1se <- fl$lambda[id_1se]
+lambda_fl_cv_1se <- fl$lambda[id_1se]
+# Print!
+print("Min Lambda 1SE CV")
+print(lambda_fl_cv_1se)
 
 ## Predict:
-lambda <- lambda_dl_cv_1se
-y_pred_fl_cv <- predict(genlasso.fit, lambda = lambda, Xnew = X_)$fit
+lambda <- lambda_fl_cv_1se
+y_pred_fl_cv <-
+  predict(genlasso.fit, lambda = lambda, Xnew = X_)$fit
 coeff_fl_cv = coef(genlasso.fit, lambda = lambda, exact = T)
-# Axis limtis necessary, otherwise R will show numeric noise! 
-plot(x_parab, coeff_fl_cv$beta * y_list$std, type = "l", ylim = c(0.001, 0.008))
-
+# Axis limits necessary, otherwise R will show numeric noise!
+plot(
+  x_parab,
+  coeff_fl_cv$beta * y_list$std,
+  type = "l",
+  ylim = c(0.001, 0.008)
+)
 plot_one_set_predictions(y, y_pred_fl_cv, y_list)
 
+# Save the regression coefficients
+df_reg_coef <-
+  data.frame(
+    coef_min_cv_rr = coef(cvfit_rr, s = "lambda.min", excact = T)[2:(p + 1),] * y_list$std,
+    coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1),] * y_list$std,
+    coef_min_cv_fused_lasso = coef(genlasso.fit, lambda = lambda_min_loss, exact = T)$beta * y_list$std,
+    coef_1se_cv_fused_lasso = coef(genlasso.fit, lambda = lambda_fl_cv_1se, exact = T)$beta * y_list$std
+  )
+write.csv(df_reg_coef, paste(path_base, "data/r/parab_n_reg_coeff.csv", sep = ""))
 
-# ToDo: Check with fusedlasso implementeation. 
-# Save the regression coefficients. 
-# Put them in. amtarix, next to each other.
-# plot the RR predictions.

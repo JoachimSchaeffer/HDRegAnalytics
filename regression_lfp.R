@@ -142,7 +142,7 @@ plot(
 y_pred <- predict(cvfit, X_train_, s = cvfit$lambda.1se)
 y_pred_test1 <- predict(cvfit, X_test1_, s = cvfit$lambda.1se)
 y_pred_test2 <- predict(cvfit, X_test2_, s = cvfit$lambda.1se)
-plot_predictions(y_train,
+plot_predictions_lfp(y_train,
                  y_pred,
                  y_test1,
                  y_pred_test1,
@@ -164,15 +164,14 @@ D_step_sparse <- as(D_step, "sparseMatrix")
 # --> Killer for functional data.
 
 fl <-
-  fusedlasso(
+  genlasso(
     y_train_,
     X_train_,
-    D_step_sparse,
-    gamma = 100,
+    D_step,
     minlam = 1e-7,
-    eps = 1e-4,
+    eps = 5e-5,
   )
-lambda_val <- 0.000002
+lambda_val <- 0.0001
 plot(fl)
 coeff_fused_lasso = coef(fl, lambda = lambda_val, exact = T)
 plot(x_lfp, coeff_fused_lasso$beta, type = "l")
@@ -183,7 +182,7 @@ y_pred_test1 <-
   predict(fl, lambda = lambda_val, Xnew = X_test1_)$fit
 y_pred_test2 <-
   predict(fl, lambda = lambda_val, Xnew = X_test2_)$fit
-plot_predictions(y_train,
+plot_predictions_lfp(y_train,
                  y_pred,
                  y_test1,
                  y_pred_test1,
