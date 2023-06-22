@@ -493,6 +493,11 @@ class Nullspace:
             * mean_squared_error(self.y, self.X @ (self.w_alpha), squared=False)
             / (np.max(self.y) - np.min(self.y))
         )
+        nrmse_alpha_v = (
+            100
+            * mean_squared_error(self.y, self.X @ (self.w_alpha + self.nullsp["v_"][-1, :]), squared=False)
+            / (np.max(self.y) - np.min(self.y))
+        )
         nrmse_beta = (
             100
             * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
@@ -516,13 +521,17 @@ class Nullspace:
             r"$\gamma\approx$"
             + f"{dec_sci_switch(self.max_gamma, decimal_switch=1, sci_acc=1)}"
         )
+        # text_nullsp = (
+        #    # r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
+        #    ", "
+        #    + gamma_str
+        #    + ", "
+        #    + r"$\Delta_{NRMSE}:$ "
+        #    + f"{self.con_val:.{fprecision}f}%"
+        # )
         text_nullsp = (
-            # r"$\in\mathcal{\mathcal{\widetilde{N}}}(\mathbf{X})$ , $\gamma\approx$"
-            ", "
-            + gamma_str
-            + ", "
-            + r"$\Delta_{NRMSE}:$ "
-            + f"{self.con_val:.{fprecision}f}%"
+            ", " + gamma_str + ", "
+            + r"$NRMSE:$ " + f"{nrmse_alpha_v:.{fprecision}f}%"
         )
         self.label_dict["alpha+v pred"] = text_pred + text_nullsp
         self.label_dict["alpha+v coef"] = text_coef + text_nullsp

@@ -19,7 +19,7 @@ import matplotlib.colors as mcolors  # noqa type: ignore
 from matplotlib import cm  # noqa type: ignore
 import matplotlib.cm as cmx  # noqa type: ignore
 import matplotlib.transforms as mtransforms  # noqa type: ignore
-
+from matplotview import inset_zoom_axes
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 
 
@@ -349,7 +349,7 @@ def plot_nullspace_analysis(
         w_alpha,
         label=label_dict["alpha"],
         color="darkgreen",
-        linewidth=2.5,
+        linewidth=3,
         zorder=v.shape[0] + 1,
     )
 
@@ -366,8 +366,8 @@ def plot_nullspace_analysis(
             d,
             w_alpha + v[-i, :],
             color=scalarMap.to_rgba(100 * nrmse[i]),
-            zorder=i,
-            linewidth=2.5,
+            zorder=i + 5,
+            linewidth=1.8,
             label=label,
             # linestyle=(0, (1, 2)),
         )
@@ -377,7 +377,7 @@ def plot_nullspace_analysis(
         w_beta,
         label=label_dict["beta"],
         color="k",
-        linewidth=2.5,
+        linewidth=3,
         zorder=2,
         # linestyle=(0, (6, 4)),
     )
@@ -429,6 +429,18 @@ def plot_nullspace_analysis(
     ax[1].grid(zorder=1)
     ax[1].legend(loc=2)
     fig.suptitle(name)
+
+    if "inset_axes_ce" in kwargs:
+        inset_axes_ce = kwargs["inset_axes_ce"]
+        zoom_coords = kwargs["zoom_coords"]
+        axins = inset_zoom_axes(ax[1], inset_axes_ce)
+        # subregion of the original image
+        axins.set_xlim(zoom_coords[0], zoom_coords[1])
+        axins.set_ylim(zoom_coords[2], zoom_coords[3])
+        axins.set_xticklabels([])
+        axins.set_yticklabels([])
+        ax[1].indicate_inset_zoom(axins, edgecolor="black")
+
     if return_fig:
         return fig, ax
     else:
