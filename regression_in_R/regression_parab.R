@@ -23,7 +23,7 @@ pacman::p_load(pacman,
 
 path_base <-
   "~/Documents/PhD/02Research/01Papers/03Nullspace/HDFeat/"
-source(paste(path_base, "src/utils.R", sep = ""))
+source(paste(path_base, "regression_in_R/utils.R", sep = ""))
 
 # Load Data
 path <- paste(path_base, "data/poly_hd_data_n.csv", sep = "")
@@ -171,4 +171,5 @@ df_reg_coef <-
     coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1),] * y_list$std,
     coef_1se_cv_fused_lasso = unname(coef(genlasso.fit, lambda = lambda_fl_cv_1se, exact = T)$beta * y_list$std)
   )
-write.csv(df_reg_coef, paste(path_base, "data/r/parab_n_reg_coeff.csv", sep = ""))
+write.csv(df_reg_coef, paste(path_base, "regression_in_R/parab_n_reg_coeff.csv", sep = ""))
+

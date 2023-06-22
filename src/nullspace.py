@@ -470,8 +470,7 @@ class Nullspace:
         title: str = "",
         **kwargs,
     ) -> tuple[plt.figure, plt.axes]:
-        if self.label_dict is None:
-            self.generate_nullspace_labels()
+        self.generate_nullspace_labels()
         if "ax_labelstr" not in kwargs.keys():
             kwargs["ax_labelstr"] = ("a)", "b)")
         fig, ax = plot_nullspace_analysis(

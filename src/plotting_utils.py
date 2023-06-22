@@ -439,6 +439,9 @@ def plot_nullspace_analysis(
         axins.set_ylim(zoom_coords[2], zoom_coords[3])
         axins.set_xticklabels([])
         axins.set_yticklabels([])
+        # Remove ticks
+        axins.xaxis.set_ticks_position("none")
+        axins.yaxis.set_ticks_position("none")
         ax[1].indicate_inset_zoom(axins, edgecolor="black")
 
     if return_fig:
