@@ -5,15 +5,15 @@
 mean_sd <- function(X) {
   mean_ <- colMeans(X)
   # TODO: TEST! Issue wiuth standard deviation!!
-  sd <- sqrt(drop(scale(X, mean_, FALSE)^2))
+  sd <- sqrt(drop(scale(X, mean_, FALSE) ^ 2))
   return <- list(mean = mean_, sd = sd)
 }
 
-mean_sd_fused_lasso <- function (x, weights = rep(1, nrow(x))) 
+mean_sd_fused_lasso <- function (x, weights = rep(1, nrow(x)))
 {
-  weights <- weights/sum(weights)
+  weights <- weights / sum(weights)
   xm <- drop(t(weights) %*% x)
-  xv <- drop(t(weights) %*% scale(x, xm, FALSE)^2)
+  xv <- drop(t(weights) %*% scale(x, xm, FALSE) ^ 2)
   xv[xv < 10 * .Machine$double.eps] <- 0
   list(mean = xm, sd = sqrt(xv))
 }
@@ -30,12 +30,12 @@ centerXtest <- function(X, X_train_list) {
 }
 
 standardize_y_train <- function(y) {
-  N <-dim(y)[1]
-  if (is.null(N)){
+  N <- dim(y)[1]
+  if (is.null(N)) {
     N <- size(y)[2]
   }
   mean_y <- mean(y)
-  std_y <- sqrt(var(y) * (N - 1) / N) #[1, 1]
+  std_y <- sqrt(var(y) * (N - 1) / N) [1, 1]
   y_std_ <- (y - mean_y) / std_y
   return <-
     list(
@@ -58,7 +58,7 @@ rescale_y <- function(y, y_train_list) {
   return <-  (y * sd_) + mean
 }
 
-plot_predictions <-
+plot_predictions_lfp <-
   function(y_train,
            y_pred,
            y_test1,
@@ -100,5 +100,24 @@ plot_predictions <-
       geom_point(data = test2_df,
                  aes(x = y_test2, y = y_test2_pred),
                  col = "#89CFF0")
+    p + labs(x = "y true", y = "y pred")
+  }
+
+plot_one_set_predictions <-
+  function(y_train,
+           y_pred,
+           y_train_list) {
+    # Well I guess this is best to do in ggplot!
+    train_df <-
+      setNames(data.frame(y_train, rescale_y(y_pred, y_train_list)),
+               c("y_train", "y_train_pred"))
+    err_train = rmserr(train_df$y_train, train_df$y_train_pred)
+    print(err_train$rmse)
+    
+    p <- ggplot() +
+      geom_point(data = train_df,
+                 aes(x = y_train, y = y_train_pred),
+                 color = "#cc0000") +
+      geom_abline(intercept = 0, slope = 1)
     p + labs(x = "y true", y = "y pred")
   }

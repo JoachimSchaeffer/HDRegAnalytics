@@ -34,7 +34,7 @@ p = 201
 X <- unname(as.matrix(parab_data[, 1:p]))
 X_list <- centerXtrain(X)
 X_ = X_list$X_
-y <-  unname(parab_data[, (p+1)])
+y <-  unname(as.matrix(parab_data[, (p + 1)]))
 y_list <- standardize_y_train(y)
 y_ <- y_list$y_std
 x_parab <-  seq(1, 3, length.out = p)
@@ -63,7 +63,7 @@ fit <- glmnet(
   excact = T,
 )
 plot(fit)
-matplot(x_parab, coef(fit, s = 1)[2:(p+1),],  type = "l")
+matplot(x_parab, coef(fit, s = 1)[2:(p + 1),],  type = "l")
 
 cvfit <-
   cv.glmnet(X_,
@@ -76,7 +76,7 @@ cvfit$lambda.min
 cvfit$lambda.1se
 plot(
   x_parab,
-  coef(cvfit, s = "lambda.1se", excact = T)[2:(p+1),],
+  coef(cvfit, s = "lambda.1se", excact = T)[2:(p + 1),],
   type = 'l',
   ylab = "",
   xlab = ""
@@ -91,111 +91,88 @@ plot(
 x <-
   c(rep(0, p - 2), 1,-1, rep(0, p - 1))
 D_step <- toeplitz2(x, p, p)
-D_step_sparse <- as(D_step, "sparseMatrix")
-rm(fl)
+# D_step_sparse <- as(D_step, "sparseMatrix")
 fl <-
-  fusedlasso(
-    y_,
-    X_,
-    D_step_sparse,
-    eps = 0.001,
-    gamma = 0.1,
-    minlam = 1e-5,
-    rtol = 1e-14,
-  )
-# btol = 1e-11
-#, eps = 0.1)#, minlam = 0.000001)
+  genlasso(y_,
+           X_,
+           D_step, )
 plot(fl)
-coeff_fused_lasso = coef(fl, lambda = 0.01, exact = T)
-plot(x_parab, coeff_fused_lasso$beta, type = "l")
+lambda_val <- 0.05
+coeff_fused_lasso = coef(fl, lambda = lambda_val, exact = T)
+plot(x_parab, coeff_fused_lasso$beta * y_list$std, type = "l")
 # Check the predictions. (put the prediction stuff in a function for easy calling!)
 # Interesting coefficients!
-lambda_val <- 0.005
 y_pred <- predict(fl, lambda = lambda_val, Xnew = X_)$fit
+# Scatter the predictions
+plot_one_set_predictions(y, y_pred, y_list)
+# GREAT! The fused lasso recovers the true coefficients almost perfectly.
 
-# CV
-# CV for chosing the EN parameter might not be trivial because lambdas will be different.
-# BuT we could save all the lambdas in a matrix and then choose in the ned based on cv.
-# Take care, this function fits a crazy amount of regression fits and can take a few hours depending on your system.
-# Lambda sequence could be optimized.
-# Technically, this is an abuse of the ``genlasso'' function, forcing it to become a "fused elastic net".
+# CV only the folds for the lambda
 # The following CV code is adapted from locobros answer:
 # https://stats.stackexchange.com/questions/198361/why-i-am-that-unsuccessful-with-predicting-with-generalized-lasso-genlasso-gen
 
 nfolds <- 10 # Debugging, increase to 10
-eps_seq <- logseq(10 ^ -3, 1, n = 30)
-n_eps <- length(eps_seq)
-eps_ <- mean(eps_seq)
 N <- nrow(X_)
 foldid <- sample(rep(seq(nfolds), length = N))
-# First run to determine lambda sequence automatically
-fusedlasso.fit <- fusedlasso(
-  y_,
-  X_,
-  D_step_sparse,
-  gamma = 0,
-  minlam = 1e-7,
-  eps = eps_,
-  rtol = 1e-11,
-)
 op <- options(nwarnings = 10000) # Keep all warnings!
-fold.lambda.losses <- vector("list", n_eps)
-for (i in 1:n_eps) {
-  fold.lambda.losses[[i]] <-
-    tapply(seq_along(foldid), foldid, function(fold.indices) {
-      fold.fusedlasso.fit <- fusedlasso(
-        y_[-fold.indices],
-        X_[-fold.indices,],
-        D_step_sparse,
-        gamma = 0,
-        minlam = 1e-5,
-        eps = eps_seq[i],
-        rtol = 1e-11,
-      )
-      ## length(fold.indices)-by-length(cv.genlasso.fit$lambda) matrix, with
-      ## predictions for this fold:
-      ## $
-      fold.fusedlasso.preds <- predict(fold.fusedlasso.fit,
-                                       lambda = fl$lambda,
-                                       #$
-                                       Xnew = X_[fold.indices,])$fit #$
-      lambda.losses <-
-        sqrt(colMeans((fold.fusedlasso.preds - y_[fold.indices]) ^ 2))
-      return (lambda.losses)
-    })
-}
-# Loop through the results, put them in new list. Column names: alpha, rows: eps
-cv.lambda.losses_mean <-
-  matrix(, nrow = length(eps_seq), ncol = length(fl$lambda))
-cv.lambda.losses_sd <-
-  matrix(, nrow = length(eps_seq), ncol = length(fl$lambda))
 
-for (i in 1:n_eps) {
-  disp(i)
-  cv.lambda.losses_mean[i,] <-
-    colMeans(do.call(rbind, fold.lambda.losses[[i]]))
-  cv.lambda.losses_sd[i,] <-
-    colStdevs(do.call(rbind, fold.lambda.losses[[i]]))
-}
+genlasso.fit <- genlasso(y = y_,
+                         X = X_,
+                         D = D_step,)
 
-# matplot(cv.lambda.losses_var, type = "l")
-# matplot(cv.lambda.losses_mean, type = "l")
+## Evaluate each lambda on each fold:
+fold.lambda.losses <-
+  tapply(seq_along(foldid), foldid, function(fold.indices) {
+    fold.genlasso.fit <- genlasso(y = y_[-fold.indices],
+                                  X = X_[-fold.indices,],
+                                  D = D_step)
+    ## length(fold.indices)-by-length(cv.genlasso.fit$lambda) matrix, with
+    ## predictions for this fold:
+    ## $
+    fold.genlasso.preds <- predict(fold.genlasso.fit,
+                                   lambda = genlasso.fit$lambda,
+                                   #$
+                                   Xnew = X_[fold.indices, ])$fit #$
+    lambda.losses <-
+      colMeans((fold.genlasso.preds - y_[fold.indices]) ^ 2)
+    return (lambda.losses)
+  })
+## CV loss for each lambda:
+cv.lambda.losses <- colMeans(do.call(rbind, fold.lambda.losses))
+cv.genlasso.lambda.min <-
+  genlasso.fit$lambda[which.min(cv.lambda.losses)]
+
+
+## Predict:
+cv.genlasso.lambda.min.pred <- predict(genlasso.fit,
+                                       lambda = cv.genlasso.lambda.min,
+                                       Xnew = cbind(1,test.x))$fit #$
 
 # Pick the best!
-lampba_min_loss <-
-  fl$lambda[which(cv.lambda.losses_mean == min(cv.lambda.losses_mean), arr.ind = TRUE)[2]]
-eps_min_loss <-
-  eps_seq[which(cv.lambda.losses_mean == min(cv.lambda.losses_mean), arr.ind = TRUE)[1]]
-fl <- fusedlasso(
-  y_,
-  X_,
-  D_step_sparse,
-  gamma = 0,
-  minlam = 1e-5,
-  eps = eps_min_loss,
-  rtol = 1e-11,
-)
-coeff_fused_lasso = coef(fl , lambda = lampba_min_loss)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
+lambda_min_loss <-
+  fl$lambda[which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)]
+# Print! 
+print("Min Loss CV")
+print(lambda_min_loss)
+
+# Pick the best with 1se
+loss_larger_than_1se <- cv.lambda.losses > (std(cv.lambda.losses) + min(cv.lambda.losses))
+# In this idealized examaple, all but one are within the 1se.
+# --> Basically all somewhat reasonable lambdas will do great.
+id_1se <- min(which(loss_larger_than_1se == FALSE))
+lambda_dl_cv_1se <- fl$lambda[id_1se]
+
 ## Predict:
-y_pred <- predict(fl, lambda = lampba_min_loss, Xnew = X_)$fit
+lambda <- lambda_dl_cv_1se
+y_pred_fl_cv <- predict(genlasso.fit, lambda = lambda, Xnew = X_)$fit
+coeff_fl_cv = coef(genlasso.fit, lambda = lambda, exact = T)
+# Axis limtis necessary, otherwise R will show numeric noise! 
+plot(x_parab, coeff_fl_cv$beta * y_list$std, type = "l", ylim = c(0.001, 0.008))
+
+plot_one_set_predictions(y, y_pred_fl_cv, y_list)
+
+
+# ToDo: Check with fusedlasso implementeation. 
+# Save the regression coefficients. 
+# Put them in. amtarix, next to each other.
+# plot the RR predictions.

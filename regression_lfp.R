@@ -2,7 +2,12 @@
 # 1. Testing different regression methods
 # 2. Regression coefficient variance estimation
 # Copyright: Joachim Schaeffer joachim.schaeffer@posteo.de
-
+# CLEAN UP
+rm(list = ls()) # Clear packages
+p_unload(all)  # Unload add-ons
+dev.off()  # Clear all plots
+cat("\014")  # Clear console
+# Clear mind :)
 ## Packages
 pacman::p_load(pacman,
                MASS,
@@ -19,7 +24,7 @@ path_base <- "~/Documents/PhD/02Research/01Papers/03Nullspace/HDFeat/"
 source(paste(path_base, "src/utils.R", sep=""))
 
 ## Load Data
-path <- paste(path_base, "HDFeat/data/lfp_slim.csv", sep = "")
+path <- paste(path_base, "data/lfp_slim.csv", sep = "")
 
 lfp_data = import(path)
 # head(lfp_data)
@@ -30,9 +35,9 @@ test1_id <- lfp_data[, 1004] == 1
 test1_id[43] <- F # Removing the shortest lived outlier battery!
 test2_id <- lfp_data[, 1004] == 2
 y_mean <-
-  import(paste(path_base, "HDFeat/data/lfp_y_mean.csv", sep = ""))
+  import(paste(path_base, "data/lfp_y_mean.csv", sep = ""))
 y_cm <-
-  import(paste(path_base, "HDFeat/data/lfp_y_cm.csv", sep = ""))
+  import(paste(path_base, "data/lfp_y_cm.csv", sep = ""))
 
 X <- unname(as.matrix(rev(lfp_data[, 2:1001])))
 X_list <- centerXtrain(X)
@@ -146,35 +151,33 @@ plot_predictions(y_train,
                  y_train_list)
 
 # Try fused lasso (1D Fused Lasso)
-# First we have to define the Matrix D
 x <-
   c(rep(0, dim(X_train)[2] - 2), 1, -1, rep(0, dim(X_train)[2] - 1))
 D_step <- toeplitz2(x, 1000, 1000)
 D_step_sparse <- as(D_step, "sparseMatrix")
+
 # Its an interplay of the scale of X and the epsilon that will be added as ridge penalty.
-# Actually this is rather a smooth EN. Even though the authors did not make it explicit,
-# by setting eps you can actually run a smoother version of the elastic net.
-#. eps = 1e-4, work well for the data in the origfinal scale. If the data is rescaled,
-# might be worrh to reconsinder how epsilon should be set.
+# Actually this is rather a fused EN. Even though the authors did not make it explicit,
+# by setting eps you can actually run a fused version of the elastic net.
+# eps = 1e-4, work well for the data in the original scale. If the data is rescaled,
+# might be worth to reconsider how eps.
 # --> Killer for functional data.
+
 fl <-
   fusedlasso(
     y_train_,
     X_train_,
     D_step_sparse,
-    gamma = 0,
+    gamma = 100,
     minlam = 1e-7,
     eps = 1e-4,
-    rtol = 1e-11,
-    # btol = 1e-11
   )
-#, eps = 0.1)#, minlam = 0.000001)
+lambda_val <- 0.000002
 plot(fl)
-coeff_fused_lasso = coef(fl, lambda = 0.005, exact = T)
+coeff_fused_lasso = coef(fl, lambda = lambda_val, exact = T)
 plot(x_lfp, coeff_fused_lasso$beta, type = "l")
 # Check the predictions. (put the prediction stuff in a function for easy calling!)
 # Interesting coefficients!
-lambda_val <- 0.005
 y_pred <- predict(fl, lambda = lambda_val, Xnew = X_train_)$fit
 y_pred_test1 <-
   predict(fl, lambda = lambda_val, Xnew = X_test1_)$fit
@@ -187,6 +190,8 @@ plot_predictions(y_train,
                  y_test2,
                  y_pred_test2,
                  y_train_list)
+# gamma = 0, minlam = 1e-7, eps = 1e-4, %% lambda = 0.005 
+# gamma = 100, minlam = 1e-7, eps = 1e-4,) lambda_val <- 0.000002
 # TBH: Pretty neat results. It struggles for the long lived cells, but that's well known.
 
 x <-
@@ -202,9 +207,9 @@ fl_p2 <-
              gamma = 0.1,
              minlam = 1e-7,)
 
-coeff_fused_lasso = coef(fl_p2, lambda = 0.001)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
 lambda_val <- 0.0001
+coeff_fused_lasso = coef(fl_p2, lambda = lambda_val)
+plot(x_lfp, coeff_fused_lasso$beta, type = "l")
 y_pred <- predict(fl_p2, lambda = lambda_val, Xnew = X_train_)$fit
 y_pred_test1 <-
   predict(fl_p2, lambda = lambda_val, Xnew = X_test1_)$fit
@@ -218,10 +223,6 @@ plot_predictions(y_train,
                  y_pred_test2,
                  y_train_list)
 
-# x <- c(rep(0, dim(X_train)[2]-4), 1, -3, -3, 1, rep(0, dim(X_train)[2]-1))
-# D_p3 <- toeplitz2(x, 1000, 1000)
-# D_p3_sparse <- as(D_p3, "sparseMatrix")
-# fl_p3 <-  genlasso(y_train_, X_train_, D_p3_sparse)
 
 # Rerun with standardization.\
 # Large gamma will converge toward classical lasso as the lasso penalizatoin
