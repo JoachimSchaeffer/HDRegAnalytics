@@ -20,7 +20,9 @@ from matplotlib import cm  # noqa type: ignore
 import matplotlib.cm as cmx  # noqa type: ignore
 import matplotlib.transforms as mtransforms  # noqa type: ignore
 from matplotview import inset_zoom_axes
+
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
+TWO_COL_FIGSIZE = [22, 8]
 
 
 def plot_x_tt2(
@@ -271,6 +273,20 @@ def truncate_colormap(
     return new_cmap
 
 
+def set_axis_label(fig, ax, trans, label_str="a)", loc=(0.0, 1.0)):
+    ax.text(
+        loc[0],
+        loc[1],
+        label_str,
+        transform=ax.transAxes + trans,
+        fontsize="large",
+        va="bottom",
+        fontweight="bold",
+        fontfamily="monospace",
+    )
+    return fig, ax
+
+
 def plot_nullspace_analysis(
     *,
     w_alpha: np.ndarray,
@@ -309,13 +325,13 @@ def plot_nullspace_analysis(
             figsize = [11, 13]
             fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex='all')
         elif kwargs["layout_type"] == "column":
-            figsize = [22, 8]
+            figsize = TWO_COL_FIGSIZE
             fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
         else:
             raise ValueError("layout_type must be 'column' or 'row'")
         layout_type = kwargs["layout_type"]
     else:
-        figsize = [22, 8]
+        figsize = TWO_COL_FIGSIZE
         fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
         layout_type = "column"
 
@@ -332,16 +348,7 @@ def plot_nullspace_analysis(
     ax[0].hlines(0, min(d), max(d), colors="k", linestyles="solid", linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
     trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
-    ax[0].text(
-        0.0,
-        1.0,
-        ax_labelstr[0],
-        transform=ax[0].transAxes + trans,
-        fontsize="large",
-        va="bottom",
-        fontweight="bold",
-        fontfamily="monospace",
-    )
+    fig, ax[0] = set_axis_label(fig, ax[0], trans, label_str="a)", loc=(0.0, 1.0))
 
     # markevery = int(len(x) / 15)
     ax[1].plot(
@@ -408,16 +415,8 @@ def plot_nullspace_analysis(
     ax[1].set_xlim(min(d), max(d))
     ax[1].set_ylim(y_min, y_max)
     ax[1].set_title("Nullspace Perspective")
-    ax[1].text(
-        -0.04,
-        1.0,
-        ax_labelstr[1],
-        transform=ax[1].transAxes + trans,
-        fontsize="large",
-        va="bottom",
-        fontweight="bold",
-        fontfamily="monospace",
-    )
+    fig, ax[1] = set_axis_label(fig, ax[1], trans, label_str="b)", loc=(-0.04, 1.0))
+
     if v.shape[0] > 1:
         cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
         cb.set_label(r"NRMSE (%)", labelpad=10)
@@ -463,8 +462,8 @@ def plot_X(
     X_std = X_ / stdx
 
     color_list = ["#0051a2", "#97964a", "#f4777f", "#93003a"]
-    figsize = [11, 13]
-    fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex=True)
+    figsize = TWO_COL_FIGSIZE
+    fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True, sharex=True)
     ax[0].plot(d, X_.T, label="Train", lw=1, color=color_list[0])
     ax[0].set_title(ax0_title)
     handles, labels = ax[0].get_legend_handles_labels()
@@ -479,7 +478,12 @@ def plot_X(
     ax[1].legend(by_label.values(), by_label.keys(), loc=2)
     ax[1].set_ylabel(r"$\Delta \widetilde{Q}_{100-10}^{std}$")
     ax[1].set_xlim(min(d), max(d))
+
+    ax[0].set_xlabel("Voltage (V)")
     ax[1].set_xlabel("Voltage (V)")
+    trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
+    fig, ax[0] = set_axis_label(fig, ax[0], trans, label_str="a)", loc=(0.0, 1.0))
+    fig, ax[1] = set_axis_label(fig, ax[1], trans, label_str="b)", loc=(-0.04, 1.0))
     return fig, ax
 
 
@@ -640,6 +644,7 @@ def plot_snr_analysis(
     d: np.ndarray = None,
     s: float = None,
     title: str = "SNR Analysis, Bspline",
+    return_fig : bool = True,
 ):
     """
     Plotting the SNR, data stats snr/mean and snr/std ratios.
@@ -705,11 +710,14 @@ def plot_snr_analysis(
         twin_.yaxis.label.set_color(par_.get_color())
         twin_.spines["right"].set_edgecolor(par_.get_color())
         twin_.tick_params(axis="y", colors=par_.get_color())
+        twin_.ticklabel_format(scilimits=(-3, 3))
 
     # make background white
     fig.patch.set_facecolor("white")
 
     ax[0].set_xlim(d[0], d[-1])
     plt.tight_layout()
-
-    plt.show()
+    if return_fig:
+        return fig, ax
+    else:
+        plt.show()

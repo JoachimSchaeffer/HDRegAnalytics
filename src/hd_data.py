@@ -193,7 +193,7 @@ class HD_Data:
             X_spline[i, :] = BSpline(*tck)(self.d)
 
         snr, noise_power = calc_snr(X_spline, X_)
-        plot_snr_analysis(X_, snr, noise_power, x=self.d, s=s, title="", **kwargs)
+        fig, ax = plot_snr_analysis(X_, snr, noise_power, d=self.d, s=s, title="", return_fig=True, **kwargs)
 
         if plot_i is not None:
             X_i = X_[plot_i, :]
@@ -220,6 +220,8 @@ class HD_Data:
             self.snr_std = snr
             self.snr_dB_std = 10 * np.log10(snr)
             self.power_noise_std = noise_power
+
+        return fig, ax
 
     def smooth_snr(self, *, window_length: int = 51, polyorder: int = 5) -> None:
         snr = self.snr
