@@ -1,13 +1,23 @@
-# Script for Fused Lasso on the Parabola Exmaple
+# Script for Fused Lasso on the Parabolic Example
 # Using the genlasso function from the genlasso package.
-# (Alternatively, fusedlasso vcould be used as well)
+# (Alternatively, the fusedlasso function could be used as well)
 # Copyright: Joachim Schaeffer joachim.schaeffer@posteo.de
 
 ## CLEAN UP
-rm(list = ls()) # Clear packagess
-tryCatch(p_unload(all), error=function(e){print("Skip clearing plots, probably no addons!")})  # Unload add-ons
-tryCatch(dev.off(), error=function(e){print("Skip clearing plots, probably no plots!")})  # Clear all plots
-cat("\014")  # Clear console
+rm(list = ls())
+tryCatch(
+  p_unload(all),
+  error = function(e) {
+    print("Skip clearing plots, probably no addons!")
+  }
+)
+tryCatch(
+  dev.off(),
+  error = function(e) {
+    print("Skip clearing plots, probably no plots!")
+  }
+)
+cat("\014")
 
 ## LOADING
 pacman::p_load(pacman,
@@ -62,7 +72,7 @@ fit <- glmnet(
   excact = T,
 )
 plot(fit)
-matplot(x_parab, coef(fit, s = 1)[2:(p + 1),],  type = "l")
+matplot(x_parab, coef(fit, s = 1)[2:(p + 1), ],  type = "l")
 
 cvfit_rr <-
   cv.glmnet(X_,
@@ -74,7 +84,7 @@ plot(cvfit_rr)
 
 plot(
   x_parab,
-  coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1),],
+  coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1), ],
   type = 'l',
   ylab = "",
   xlab = ""
@@ -85,13 +95,13 @@ plot_one_set_predictions(y, y_pred, y_list)
 
 # Fused Lasso (1D Fused Lasso)
 x <-
-  c(rep(0, p - 2), 1,-1, rep(0, p - 1))
+  c(rep(0, p - 2), 1, -1, rep(0, p - 1))
 D_step <- toeplitz2(x, p, p)
 # D_step_sparse <- as(D_step, "sparseMatrix")
 fl <-
   genlasso(y_,
            X_,
-           D_step, )
+           D_step,)
 plot(fl)
 lambda_val <- 0.05
 coeff_fused_lasso = coef(fl, lambda = lambda_val, exact = T)
@@ -115,19 +125,19 @@ op <- options(nwarnings = 10000) # Keep all warnings!
 
 genlasso.fit <- genlasso(y = y_,
                          X = X_,
-                         D = D_step,)
+                         D = D_step, )
 
 ## Evaluate each lambda on each fold:
 fold.lambda.losses <-
   tapply(seq_along(foldid), foldid, function(fold.indices) {
     fold.genlasso.fit <- genlasso(y = y_[-fold.indices],
-                                  X = X_[-fold.indices,],
+                                  X = X_[-fold.indices, ],
                                   D = D_step)
 
     fold.genlasso.preds <- predict(fold.genlasso.fit,
                                    lambda = genlasso.fit$lambda,
                                    #$
-                                   Xnew = X_[fold.indices, ])$fit 
+                                   Xnew = X_[fold.indices,])$fit
     lambda.losses <-
       colMeans((fold.genlasso.preds - y_[fold.indices]) ^ 2)
     return (lambda.losses)
@@ -168,8 +178,10 @@ plot_one_set_predictions(y, y_pred_fl_cv, y_list)
 ## SAVE REGRESSION COEFFICIENTS
 df_reg_coef <-
   data.frame(
-    coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1),] * y_list$std,
-    coef_1se_cv_fused_lasso = unname(coef(genlasso.fit, lambda = lambda_fl_cv_1se, exact = T)$beta * y_list$std)
+    coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1), ] * y_list$std,
+    coef_1se_cv_fused_lasso = unname(
+      coef(genlasso.fit, lambda = lambda_fl_cv_1se, exact = T)$beta * y_list$std
+    )
   )
-write.csv(df_reg_coef, paste(path_base, "regression_in_R/parab_n_reg_coeff.csv", sep = ""))
-
+write.csv(df_reg_coef,
+          paste(path_base, "regression_in_R/parab_n_reg_coeff.csv", sep = ""))

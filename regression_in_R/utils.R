@@ -9,6 +9,7 @@ mean_sd <- function(X) {
   return <- list(mean = mean_, sd = sd)
 }
 
+# EXPERIMENTAL FUNCTION
 mean_sd_fused_lasso <- function (x, weights = rep(1, nrow(x)))
 {
   weights <- weights / sum(weights)
@@ -74,22 +75,22 @@ plot_predictions_lfp <-
       c("y_train", "y_train_pred"))
     err_train = rmserr(train_df$y_train, train_df$y_train_pred)
     print(err_train$rmse)
-    
+
     test1_df <-
       setNames(data.frame(exp(y_test1), exp(rescale_y(
         y_pred_test1, y_train_list
       ))), c("y_test1", "y_test1_pred"))
     err_test1 = rmserr(test1_df$y_test1, test1_df$y_test1_pred)
     print(err_test1$rmse)
-    
+
     test2_df <-
       setNames(data.frame(exp(y_test2), exp(rescale_y(
         y_pred_test2, y_train_list
       ))), c("y_test2", "y_test2_pred"))
     err_test2 = rmserr(test2_df$y_test2, test2_df$y_test2_pred)
     print(err_test2$rmse)
-    
-    
+
+
     p <- ggplot() +
       geom_point(data = train_df,
                  aes(x = y_train, y = y_train_pred),
@@ -113,11 +114,50 @@ plot_one_set_predictions <-
                c("y_train", "y_train_pred"))
     err_train = rmserr(train_df$y_train, train_df$y_train_pred)
     print(err_train$rmse)
-    
+
     p <- ggplot() +
       geom_point(data = train_df,
                  aes(x = y_train, y = y_train_pred),
                  color = "#cc0000") +
       geom_abline(intercept = 0, slope = 1)
     p + labs(x = "y true", y = "y pred")
+  }
+
+predict_plot_lfp <-
+  function(trained_model,
+           lambda_val,
+           X_train_,
+           X_test1_,
+           X_test2_,
+           y_train_list,
+           model = "cvfit") {
+    if (model == "cvfit") {
+      y_pred <-
+        predict(trained_model, X_train_, s = lambda_val)
+      y_pred_test1 <-
+        predict(trained_model, X_test1_, s = lambda_val)
+      y_pred_test2 <-
+        predict(trained_model, X_test2_, s = lambda_val)
+    }
+    else {
+      y_pred <-
+        predict(trained_model,
+                lambda = lambda_val,
+                Xnew = X_train_)$fit
+      y_pred_test1 <-
+        predict(trained_model,
+                lambda = lambda_val,
+                Xnew = X_test1_)$fit
+      y_pred_test2 <-
+        predict(trained_model,
+                lambda = lambda_val,
+                Xnew = X_test2_)$fit
+    }
+    plot_predictions_lfp(y_train,
+                         y_pred,
+                         y_test1,
+                         y_pred_test1,
+                         y_test2,
+                         y_pred_test2,
+                         y_train_list)
   }
