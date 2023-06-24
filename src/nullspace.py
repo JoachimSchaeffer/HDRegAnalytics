@@ -135,7 +135,7 @@ class Nullspace:
         nullspace_path: bool = True,
         con_thres: float = 0.5,
         opt_gamma_method: str = "Xv",
-        analyse_objective_trajectory: bool = True,
+        analyse_objective_trajectory: bool = False,
         plot_results: bool = False,
         save_plot: bool = False,
         path_save: str = "",

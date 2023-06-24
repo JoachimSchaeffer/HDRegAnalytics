@@ -348,7 +348,7 @@ def plot_nullspace_analysis(
     ax[0].hlines(0, min(d), max(d), colors="k", linestyles="solid", linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
     trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
-    fig, ax[0] = set_axis_label(fig, ax[0], trans, label_str="a)", loc=(0.0, 1.0))
+    fig, ax[0] = set_axis_label(fig, ax[0], trans, label_str=ax_labelstr[0], loc=(0.0, 1.0))
 
     # markevery = int(len(x) / 15)
     ax[1].plot(
@@ -414,8 +414,8 @@ def plot_nullspace_analysis(
     ax[0].set_xlim(min(d), max(d))
     ax[1].set_xlim(min(d), max(d))
     ax[1].set_ylim(y_min, y_max)
-    ax[1].set_title("Nullspace Perspective")
-    fig, ax[1] = set_axis_label(fig, ax[1], trans, label_str="b)", loc=(-0.04, 1.0))
+    ax[1].set_title("Nullspace Analysis")
+    fig, ax[1] = set_axis_label(fig, ax[1], trans, label_str=ax_labelstr[1], loc=(-0.04, 1.0))
 
     if v.shape[0] > 1:
         cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
