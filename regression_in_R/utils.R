@@ -161,3 +161,94 @@ predict_plot_lfp <-
                          y_pred_test2,
                          y_train_list)
   }
+
+cv_genlasso <-
+  function(X_train_,
+           y_train_,
+           D,
+           nfolds = 5,
+           plot_cv = T,
+           minlam = c(1e-9, 1e-9),
+           maxsteps = c(2000, 2000)) {
+    N <- nrow(X_train_)
+    foldid <- sample(rep(seq(nfolds), length = N))
+    op <- options(nwarnings = 10000) # Keep all warnings!
+    genlasso.fit <-
+      genlasso(y_train_,
+               X_train_,
+               D,
+               maxsteps = maxsteps[1],
+               minlam = minlam[1])
+    ## Evaluate each lambda on each fold:
+    fold.lambda.losses <-
+      tapply(seq_along(foldid), foldid, function(fold.indices) {
+        disp("step")
+        fold.genlasso.fit <- genlasso(
+          y = y_train_[-fold.indices],
+          X = X_train_[-fold.indices,],
+          D = D,
+          maxsteps = maxsteps[2],
+          minlam = minlam[2],
+        )
+
+        fold.genlasso.preds <- predict(fold.genlasso.fit,
+                                       lambda = genlasso.fit$lambda,
+                                       Xnew = X_train_[fold.indices, ])$fit
+
+        lambda.losses <-
+          colMeans((fold.genlasso.preds - y_train_[fold.indices]) ^ 2)
+
+        return (lambda.losses)
+      })
+    # CV loss for each lambda:
+    cv.lossmatrix <- do.call(rbind, fold.lambda.losses)
+    cv.lambda.losses <- colMeans(cv.lossmatrix)
+    cv.lambda.losses_sd <- colStdevs(cv.lossmatrix)
+    cv.genlasso.lambda.min <-
+      genlasso.fit$lambda[which.min(cv.lambda.losses)]
+
+    id_min <-
+      which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)
+    lambda_min_loss <-
+      genlasso.fit$lambda[id_min]
+
+    print("Min Lambda CV")
+    print(lambda_min_loss)
+
+    loss_larger_than_1se <-
+      cv.lambda.losses > (cv.lambda.losses_sd[id_min] + min(cv.lambda.losses))
+    id_1se <- min(which(loss_larger_than_1se == FALSE))
+    lambda_cv_1se <- genlasso.fit$lambda[id_1se]
+    print("Min Lambda 1SE CV")
+    print(lambda_cv_1se)
+    if (plot_cv == TRUE) {
+
+    }
+    matplot(
+      genlasso.fit$lambda,
+      cv.lambda.losses,
+      type = "l",
+      ylab = "loss",
+      xlab = "lambda",
+      main = "CV",
+      log = "x"
+    )
+    matplot(
+      genlasso.fit$lambda,
+      cv.lambda.losses + cv.lambda.losses_sd,
+      type = "l",
+      ylab = "loss",
+      xlab = "lambda",
+      main = "CV",
+      log = "x",
+      add = TRUE
+    )
+    return <-
+      list(
+        "genlasso.fit" = genlasso.fit,
+        "lossmatrix" = cv.lossmatrix,
+        "lambda_vals" = genlasso.fit$lambda,
+        "lambda.min" = lambda_min_loss,
+        "lambda.1se" = lambda_cv_1se
+      )
+  }

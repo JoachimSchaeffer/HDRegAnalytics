@@ -118,54 +118,18 @@ plot_one_set_predictions(y, y_pred, y_list)
 # CV only the folds for the lambda
 # The following CV code is adapted from locobros answer:
 # https://stats.stackexchange.com/questions/198361/why-i-am-that-unsuccessful-with-predicting-with-generalized-lasso-genlasso-gen
-nfolds <- 10 # Debugging, increase to 10
-N <- nrow(X_)
-foldid <- sample(rep(seq(nfolds), length = N))
-op <- options(nwarnings = 10000) # Keep all warnings!
-
-genlasso.fit <- genlasso(y = y_,
-                         X = X_,
-                         D = D_step, )
-
-## Evaluate each lambda on each fold:
-fold.lambda.losses <-
-  tapply(seq_along(foldid), foldid, function(fold.indices) {
-    fold.genlasso.fit <- genlasso(y = y_[-fold.indices],
-                                  X = X_[-fold.indices, ],
-                                  D = D_step)
-
-    fold.genlasso.preds <- predict(fold.genlasso.fit,
-                                   lambda = genlasso.fit$lambda,
-                                   #$
-                                   Xnew = X_[fold.indices,])$fit
-    lambda.losses <-
-      colMeans((fold.genlasso.preds - y_[fold.indices]) ^ 2)
-    return (lambda.losses)
-  })
-# CV loss for each lambda:
-cv.lambda.losses <- colMeans(do.call(rbind, fold.lambda.losses))
-cv.genlasso.lambda.min <-
-  genlasso.fit$lambda[which.min(cv.lambda.losses)]
-
-lambda_min_loss <-
-  fl$lambda[which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)]
-
-print("Min Lambda CV")
-print(lambda_min_loss)
-
-loss_larger_than_1se <-
-  cv.lambda.losses > (std(cv.lambda.losses) + min(cv.lambda.losses))
-id_1se <- min(which(loss_larger_than_1se == FALSE))
-lambda_fl_cv_1se <- fl$lambda[id_1se]
-
-print("Min Lambda 1SE CV")
-print(lambda_fl_cv_1se)
+cv_list_D1 = cv_genlasso(
+  X_,
+  y_,
+  D_step,
+  nfolds = 10,
+)
 
 # Predict:
-lambda <- lambda_fl_cv_1se
+lambda <- cv_list_D1$lambda.1se
 y_pred_fl_cv <-
-  predict(genlasso.fit, lambda = lambda, Xnew = X_)$fit
-coeff_fl_cv = coef(genlasso.fit, lambda = lambda, exact = T)
+  predict(cv_list_D1$genlasso.fit, lambda = lambda, Xnew = X_)$fit
+coeff_fl_cv = coef(cv_list_D1$genlasso.fit, lambda = lambda, exact = T)
 # Axis limits necessary, otherwise R will show numeric noise!
 plot(
   x_parab,
@@ -180,7 +144,7 @@ df_reg_coef <-
   data.frame(
     coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1), ] * y_list$std,
     coef_1se_cv_fused_lasso = unname(
-      coef(genlasso.fit, lambda = lambda_fl_cv_1se, exact = T)$beta * y_list$std
+      coef(cv_list_D1$genlasso.fit, lambda = cv_list_D1$lambda.1se, exact = T)$beta * y_list$std
     )
   )
 write.csv(df_reg_coef,
