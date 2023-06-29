@@ -39,7 +39,7 @@ def optimize_pls(
         # For more information see:
         # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_predict.html
         scores = cross_val_score(
-            pls, X, y, cv=folds, n_jobs=-1, scoring="neg_root_mean_squared_error"
+            pls, X, y, cv=folds, n_jobs=-1, scoring="neg_mean_squared_error"
         )
         rmse[comp - 1] = -scores.mean()
         stds[comp - 1] = scores.std()

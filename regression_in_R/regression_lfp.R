@@ -16,6 +16,7 @@ tryCatch(
   }
 )
 cat("\014")
+set.seed(42)
 
 ## LOADING
 pacman::p_load(pacman,
@@ -437,11 +438,11 @@ cv_list_D1_std = cv_genlasso(
 )
 #, minlam = c(1e-4, 1e-5),
 #  maxsteps = c(2000, 6000))
-coeff_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.min)
+coeff_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = 1.64)
 plot(x_lfp, coeff_D1_std_cv$beta, type = "l")
 predict_plot_lfp(
   cv_list_D1_std$genlasso.fit,
-  cv_list_D1_std$lambda.min,
+  1.64,
   X_train_std,
   X_test1_std,
   X_test2_std,
@@ -475,3 +476,8 @@ write.csv(
     sep = ""
   )
 )
+
+
+# fix the saving!
+# save the prediction accouracies as well!
+# Fix seed!

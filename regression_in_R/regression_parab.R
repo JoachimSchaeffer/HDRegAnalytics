@@ -18,6 +18,7 @@ tryCatch(
   }
 )
 cat("\014")
+set.seed(42)
 
 ## LOADING
 pacman::p_load(pacman,
@@ -143,8 +144,12 @@ plot_one_set_predictions(y, y_pred_fl_cv, y_list)
 df_reg_coef <-
   data.frame(
     coef_1se_cv_rr = coef(cvfit_rr, s = "lambda.1se", excact = T)[2:(p + 1), ] * y_list$std,
+    coef_min_cv_rr = coef(cvfit_rr, s = "lambda.min", excact = T)[2:(p + 1), ] * y_list$std,
     coef_1se_cv_fused_lasso = unname(
       coef(cv_list_D1$genlasso.fit, lambda = cv_list_D1$lambda.1se, exact = T)$beta * y_list$std
+    ),
+    coef_1se_cv_fused_lasso = unname(
+      coef(cv_list_D1$genlasso.fit, lambda = cv_list_D1$lambda.min, exact = T)$beta * y_list$std
     )
   )
 write.csv(df_reg_coef,
