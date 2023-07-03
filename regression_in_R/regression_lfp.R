@@ -83,127 +83,6 @@ matplot(
 )
 
 # REGRESSION SECTION
-# Run regression with glmnet (alpha = 0 is ridge regression!)
-lambda_seq <- logseq(10 ^ -8, 0.1, n = 1000)
-cvfit <-
-  cv.glmnet(
-    X_train_,
-    y_train_,
-    n_folds = 10,
-    alpha = 0,
-    lambda = lambda_seq,
-    standardize = F,
-  )
-plot(cvfit)
-cvfit$lambda.min
-cvfit$lambda.1se
-plot(
-  x_lfp,
-  coef(cvfit, s = "lambda.1se", excact = T)[2:1001, ],
-  type = 'l',
-  ylab = "",
-  xlab = ""
-)
-
-# Calculate the RR coefficients manually to check how it's done in glmnet,
-# n = dim(y_train_)[1]
-# y_std = sqrt(var(y_train_)*(n-1)/n)[1,1]
-# lambda = 2
-# w1 <- solve(t(X_train_)%*%X_train_+lambda*diag(1000),t(X_train_)%*%(y_train_))[,1]
-# fit_glmnet_test <- glmnet(X_train_, y_train_, alpha=0, standardize = F, intercept = FALSE, thresh = 1e-20)
-# w2 <- as.vector(coef(fit_glmnet_test, x= X_train_, y=y_train_, s = lambda*y_std/41, exact = TRUE))[-1]
-# cbind(w1[1:10], w2[1:10])
-# --> Regression coefficients are the same. Yuhuu. Lets move on.
-# More details about differences in the objective function can be found here:
-# https://stats.stackexchange.com/questions/129179/why-is-glmnet-ridge-regression-giving-me-a-different-answer-than-manual-calculat
-
-# Calculate stats on tests sets
-disp("Evaluating RR MIN CV ...")
-predict_plot_lfp(
-  cvfit,
-  lambda_val = cvfit$lambda.min,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "cvfit"
-)
-disp("Evaluating RR 1SE CV ...")
-predict_plot_lfp(
-  cvfit,
-  lambda_val = cvfit$lambda.1se,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "cvfit"
-)
-
-# Run CV on the elastic net:
-# Code Snippets from: https://rpubs.com/jmkelly91/881590
-models <- list()
-results <- data.frame()
-for (i in 0:20) {
-  name <- paste0("alpha", i / 20)
-  disp(name)
-  models[[name]] <-
-    cv.glmnet(
-      X_train_,
-      y_train_,
-      n_folds = 10,
-      alpha = i / 20,
-      lambda = lambda_seq,
-      standardize = F,
-    )
-  # min_cvm_id <- which(min(models[[name]]$cvm) == models[[name]]$cvm)
-  mse <- min(models[[name]]$cvm)
-  lambda_min <- models[[name]]$lambda.min
-  lambda_1se <- models[[name]]$lambda.1se
-  ## Store the results
-  temp <-
-    data.frame(
-      alpha = i / 20,
-      min_mse = mse,
-      lambda_min = lambda_min,
-      lambda_1se = lambda_1se,
-      name = name
-    )
-  results <- rbind(results, temp)
-}
-best_id <- which(min(results$min_mse) == results$min_mse)
-results_best <- results[best_id, ]
-plot(
-  x_lfp,
-  coef(
-    models[[best_id]],
-    lambda = results_best$lambda_min,
-    alpha = results_best$alpha,
-    excact = T
-  )[2:1001, ],
-  type = 'l',
-  ylab = "",
-  xlab = ""
-)
-predict_plot_lfp(
-  models[[best_id]],
-  lambda_val = results_best$lambda_1se,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "cvfit"
-)
-predict_plot_lfp(
-  models[[best_id]],
-  lambda_val = results_best$lambda_min,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "cvfit"
-)
-
-
 # FUSED LASSO
 # 1. D1: Sparsity in difference penalty
 # 2. D2: "Trendfiltering" k=2
@@ -253,8 +132,6 @@ predict_plot_lfp(fl_std_p1,
 # CV for choosing the regularization parameter!
 # The following CV code is adapted from locobros answer:
 # https://stats.stackexchange.com/questions/198361/why-i-am-that-unsuccessful-with-predicting-with-generalized-lasso-genlasso-gen
-
-
 # Generate folds, should be the same for all CV runs!
 nfolds <- 10
 N <- nrow(X_train_)
@@ -299,8 +176,8 @@ write.csv(lm_df,
           ))
 
 # Now for the Std data!
-lambda_seq <- linspace(5, 0.01, 500)
-
+# lambda_seq <- linspace(5, 0.01, 500)
+#lambda_seq = lambda_seq,
 cv_list_D1_std = cv_genlasso(
   X_train_std,
   y_train_,
@@ -309,7 +186,7 @@ cv_list_D1_std = cv_genlasso(
   y_train_list,
   minlam = c(1e-2, 1e-3),
   maxsteps = c(2000, 2000),
-  lambda_seq = lambda_seq,
+
 )
 coeff_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.min)
 plot(x_lfp, coeff_D1_std_cv$beta, type = "l")

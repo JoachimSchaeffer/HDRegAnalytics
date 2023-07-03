@@ -8,7 +8,7 @@ rm(list = ls())
 tryCatch(
   p_unload(all),
   error = function(e) {
-    print("Skip clearing plots, probably no addons!")
+    print("Skip unloading addons, probably no addons!")
   }
 )
 tryCatch(

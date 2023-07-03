@@ -205,7 +205,12 @@ cv_genlasso <-
 
         # Rewrite with error in Logspace!
         lambda.losses <-
-          colMeans((exp(rescale_y(fold.genlasso.preds)) - exp(rescale_y(y_train_[fold.indices]))) ^ 2)
+          colMeans((exp(
+            rescale_y(fold.genlasso.preds, y_train_list)
+          )
+          - exp(rescale_y(
+            y_train_[fold.indices], y_train_list
+          ))) ^ 2)
 
         return (lambda.losses)
       })
@@ -213,7 +218,8 @@ cv_genlasso <-
     cv.lossmatrix <- do.call(rbind, fold.lambda.losses)
     cv.lambda.losses <- colMeans(cv.lossmatrix)
     cv.lambda.losses_sd <- colStdevs(cv.lossmatrix)
-    cv.genlasso.lambda.min <- lambda_seq[which.min(cv.lambda.losses)]
+    cv.genlasso.lambda.min <-
+      lambda_seq[which.min(cv.lambda.losses)]
 
     id_min <-
       which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)
