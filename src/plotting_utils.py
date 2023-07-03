@@ -8,7 +8,7 @@ import seaborn as sns  # type: ignore
 from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 
-from utils import optimize_pls  # type: ignore
+from utils import optimize_pls_cv
 from utils import nrmse  # type: ignore
 from utils import optimize_rr_cv, optimize_rr_min_dist
 from typing import Union
@@ -131,7 +131,7 @@ def optimize_cv(
             stdv = scaler.scale_
 
     if algorithm == "PLS":
-        res_dict = optimize_pls(
+        res_dict = optimize_pls_cv(
             X,
             y,
             max_comps=max_comps,

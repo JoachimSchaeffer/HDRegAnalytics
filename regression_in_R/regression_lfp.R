@@ -1,12 +1,13 @@
 # Script for Fused Lasso on the LFP Data with Cycle Life Response
 # Copyright: Joachim Schaeffer joachim.schaeffer@posteo.de
+# Run time for the entire script including CV 15-20 mintues.
 
 ## CLEAN UP
 rm(list = ls())
 tryCatch(
   p_unload(all),
   error = function(e) {
-    print("Skip clearing plots, probably no addons!")
+    print("Skip unloading addons, probably no addons!")
   }
 )
 tryCatch(
@@ -36,9 +37,7 @@ source(paste(path_base, "regression_in_R/utils.R", sep = ""))
 
 ## Load Data
 path <- paste(path_base, "data/lfp_slim.csv", sep = "")
-
 lfp_data = import(path)
-# head(lfp_data)
 
 ## Construct Data Matrices
 train_id <- lfp_data[, 1004] == 0
@@ -50,10 +49,9 @@ X <- unname(as.matrix(rev(lfp_data[, 2:1001])))
 X_list <- centerXtrain(X)
 X_ = X_list$X_
 
-X_train <- X[train_id, ]
-X_test1 <- X[test1_id, ]
-X_test2 <- X[test2_id, ]
-
+X_train <- X[train_id,]
+X_test1 <- X[test1_id,]
+X_test2 <- X[test2_id,]
 X_train_list <- centerXtrain(X_train)
 X_train_ <- X_train_list$X_
 X_test1_ <- centerXtest(X_test1, X_train_list)
@@ -63,12 +61,8 @@ y <-  lfp_data[, 1002]
 y_train <- log(unname(as.matrix(y[train_id])))
 y_test1 <- log(unname(as.matrix(y[test1_id])))
 y_test2 <- log(unname(as.matrix(y[test2_id])))
-
 y_train_list <- standardize_y_train(y_train)
 y_train_ <- y_train_list$y_std
-
-y_train_mean = rowMeans(X_train)
-y_train_mean_ <- y_train_mean - mean(y_train_mean)
 
 x_lfp <-  seq(2, 3.5, length.out = 1000)
 
@@ -105,7 +99,7 @@ cvfit$lambda.min
 cvfit$lambda.1se
 plot(
   x_lfp,
-  coef(cvfit, s = "lambda.1se", excact = T)[2:1001,],
+  coef(cvfit, s = "lambda.1se", excact = T)[2:1001, ],
   type = 'l',
   ylab = "",
   xlab = ""
@@ -177,7 +171,7 @@ for (i in 0:20) {
   results <- rbind(results, temp)
 }
 best_id <- which(min(results$min_mse) == results$min_mse)
-results_best <- results[best_id,]
+results_best <- results[best_id, ]
 plot(
   x_lfp,
   coef(
@@ -185,7 +179,7 @@ plot(
     lambda = results_best$lambda_min,
     alpha = results_best$alpha,
     excact = T
-  )[2:1001,],
+  )[2:1001, ],
   type = 'l',
   ylab = "",
   xlab = ""
@@ -213,10 +207,10 @@ predict_plot_lfp(
 # FUSED LASSO
 # 1. D1: Sparsity in difference penalty
 # 2. D2: "Trendfiltering" k=2
-# 3. D3: "Trendfiltering" k=2
-# 4. D4: Standardize + D1
+# 3. D4: Standardize + D1
+
 x <-
-  c(rep(0, dim(X_train)[2] - 2), 1,-1, rep(0, dim(X_train)[2] - 1))
+  c(rep(0, dim(X_train)[2] - 2), 1, -1, rep(0, dim(X_train)[2] - 1))
 D1 <- toeplitz2(x, 1000, 1000)
 #D1_sparse <- as(D1, "sparseMatrix")
 fl <-
@@ -234,41 +228,10 @@ predict_plot_lfp(fl,
                  y_train_list,
                  model = "genlasso")
 # Pretty neat results. It struggles for the long lived cells, but that's well known.
-# Other experimental values that can be tried with the fusedlasso function.
-# However, even though the genlasso function is slower, it is more stable for this data set.
-# gamma = 0, minlam = 1e-7, eps = 1e-4, %% lambda = 0.005
-# gamma = 100, minlam = 1e-7, eps = 1e-4,) lambda_val <- 0.000002
 
 x <-
-  c(rep(0, dim(X_train)[2] - 3), 0.5,-1, 0.5, rep(0, dim(X_train)[2] - 1))
+  c(rep(0, dim(X_train)[2] - 3), 0.5, -1, 0.5, rep(0, dim(X_train)[2] - 1))
 D2 <- toeplitz2(x, 1000, 1000)
-fl_p2 <- genlasso(y_train_, X_train_, D2)
-lambda_val <- 1.1
-coeff_fused_lasso = coef(fl_p2, lambda = lambda_val)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
-predict_plot_lfp(fl_p2,
-                 lambda_val,
-                 X_train_,
-                 X_test1_,
-                 X_test2_,
-                 y_train_list,
-                 model = "genlasso")
-
-x <-
-  c(rep(0, dim(X_train)[2] - 4), 0.25, -0.75, 0.75, -0.25, rep(0, dim(X_train)[2] - 1))
-D3 <- toeplitz2(x, 1000, 1000)
-fl_p3 <- genlasso(y_train_, X_train_, D3)
-lambda_val <- 1.1
-coeff_fused_lasso = coef(fl_p3, lambda = lambda_val)
-plot(x_lfp, coeff_fused_lasso$beta, type = "l")
-predict_plot_lfp(fl_p3,
-                 lambda_val,
-                 X_train_,
-                 X_test1_,
-                 X_test2_,
-                 y_train_list,
-                 model = "genlasso")
-# BATMAN!
 
 sd_train <- apply(X_train_, 2, sd)
 X_train_std <- scale(X_train_, center = F, scale = sd_train)
@@ -285,13 +248,19 @@ predict_plot_lfp(fl_std_p1,
                  X_test2_std,
                  y_train_list,
                  model = "genlasso")
-# --> Standardization not terrible of regularization is chosen appropriately!
-# The fused model, can regularize the noise that would otherwise appear!
+# The fused model, can regularize the noise that would otherwise blow up!
 
 # CV for choosing the regularization parameter!
 # The following CV code is adapted from locobros answer:
 # https://stats.stackexchange.com/questions/198361/why-i-am-that-unsuccessful-with-predicting-with-generalized-lasso-genlasso-gen
-cv_list = cv_genlasso(X_train_, y_train_, D1, nfolds = 10)
+
+
+# Generate folds, should be the same for all CV runs!
+nfolds <- 10
+N <- nrow(X_train_)
+foldid <- sample(rep(seq(nfolds), length = N))
+
+cv_list = cv_genlasso(X_train_, y_train_, D1, foldid, y_train_list)
 coeff_cv = coef(cv_list$genlasso.fit , lambda = cv_list$lambda.min)
 plot(x_lfp, coeff_cv$beta, type = "l")
 predict_plot_lfp(
@@ -303,16 +272,14 @@ predict_plot_lfp(
   y_train_list,
   model = "genlasso"
 )
-# Open question: The CV results are relatively large. An issue here is that the "longest" and "shortest" lived batteries
-# can blow up the Standard deviation significantly.
+# An issue here is that the "longest" and "shortest" lived batteries
+# can blow up the atandard deviation significantly. --> Using the min cv value.
 ## SAVE REGRESSION COEFFICIENTS
 df_reg_coef <-
-  data.frame(coef_D1_1se = unname(coef(
-    cv_list$genlasso.fit , lambda = cv_list$lambda.1se
-  )),
-  coef_D1_cv = unname(coef(
-    cv_list$genlasso.fit , lambda = cv_list$lambda.min
-  )))
+  data.frame(
+    coef_D1_1se = coef(cv_list$genlasso.fit , lambda = cv_list$lambda.1se)$beta * y_train_list$std,
+    coef_D1_cv = coef(cv_list$genlasso.fit , lambda = cv_list$lambda.min)$beta * y_train_list$std
+  )
 write.csv(
   df_reg_coef,
   paste(
@@ -331,118 +298,24 @@ write.csv(lm_df,
             sep = ""
           ))
 
-
-# Now for the D2
-cv_list_D2 = cv_genlasso(
-  X_train_,
-  y_train_,
-  D2,
-  nfolds = 10,
-  minlam = c(1e-4, 1e-5),
-  maxsteps = c(5000, 5000)
-)
-coeff_D2_cv = coef(cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.min)
-plot(x_lfp, coeff_D2_cv$beta, type = "l")
-predict_plot_lfp(
-  cv_list_D2$genlasso.fit,
-  cv_list_D2$lambda.min,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "genlasso"
-)
-## SAVE REGRESSION COEFFICIENTS
-df_reg_coef <-
-  data.frame(coef_D2_1se = unname(coef(
-    cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.1se
-  )),
-  coef_D2_cv = unname(coef(
-    cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.min
-  )))
-write.csv(
-  df_reg_coef,
-  paste(
-    path_base,
-    "regression_in_R/lfp_cl_D2_cv_reg_coeff.csv",
-    sep = ""
-  )
-)
-
-lm_df <- as.data.frame(cv_list_D2$lossmatrix)
-names(lm_df) <- cv_list_D2$lambda_vals
-write.csv(lm_df,
-          paste(
-            path_base,
-            "regression_in_R/lfp_cl_D2_cv_lossmatrix.csv",
-            sep = ""
-          ))
-
-# Now for the D3
-# Might need to modify the cutoff of lambda for this example.
-cv_list_D3 = cv_genlasso(
-  X_train_,
-  y_train_,
-  D3,
-  nfolds = 10,
-  minlam = c(1e-4, 1e-5),
-  maxsteps = c(2000, 6000)
-)
-coeff_D3_cv = coef(cv_list_D3$genlasso.fit , lambda = cv_list_D3$lambda.min)
-plot(x_lfp, coeff_D3_cv$beta, type = "l")
-predict_plot_lfp(
-  cv_list_D3$genlasso.fit,
-  cv_list_D3$lambda.min,
-  X_train_,
-  X_test1_,
-  X_test2_,
-  y_train_list,
-  model = "genlasso"
-)
-## SAVE REGRESSION COEFFICIENTS
-df_reg_coef <-
-  data.frame(coef_D3_1se = unname(coef(
-    cv_list_D3$genlasso.fit , lambda = cv_list_D3$lambda.1se
-  )),
-  coef_D3_cv = unname(coef(
-    cv_list_D3$genlasso.fit , lambda = cv_list_D3$lambda.min
-  )))
-write.csv(
-  df_reg_coef,
-  paste(
-    path_base,
-    "regression_in_R/lfp_cl_D3_cv_reg_coeff.csv",
-    sep = ""
-  )
-)
-
-lm_df <- as.data.frame(cv_list_D3$lossmatrix)
-names(lm_df) <- cv_list_D3$lambda_vals
-write.csv(lm_df,
-          paste(
-            path_base,
-            "regression_in_R/lfp_cl_D3_cv_lossmatrix.csv",
-            sep = ""
-          ))
-
-
 # Now for the Std data!
-# Might need to modify the cutoff of lambda for this example.
+lambda_seq <- linspace(5, 0.01, 500)
+
 cv_list_D1_std = cv_genlasso(
   X_train_std,
   y_train_,
   D1,
-  nfolds = 10,
-  minlam = c(1e-3, 1e-4),
-  maxsteps = c(2000, 4000)
+  foldid,
+  y_train_list,
+  minlam = c(1e-2, 1e-3),
+  maxsteps = c(2000, 2000),
+  lambda_seq = lambda_seq,
 )
-#, minlam = c(1e-4, 1e-5),
-#  maxsteps = c(2000, 6000))
-coeff_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = 1.64)
+coeff_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.min)
 plot(x_lfp, coeff_D1_std_cv$beta, type = "l")
 predict_plot_lfp(
   cv_list_D1_std$genlasso.fit,
-  1.64,
+  cv_list_D1_std$lambda.min,
   X_train_std,
   X_test1_std,
   X_test2_std,
@@ -451,12 +324,12 @@ predict_plot_lfp(
 )
 ## SAVE REGRESSION COEFFICIENTS
 df_reg_coef <-
-  data.frame(coef_D1_std_1se = unname(
-    coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.1se)
-  ),
-  coef_D1_std_cv = unname(
-    coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.min)
-  ))
+  data.frame(
+    coef_D1_std_1se = coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.1se)$beta *
+      y_train_list$std,
+    coef_D1_std_cv = coef(cv_list_D1_std$genlasso.fit , lambda = cv_list_D1_std$lambda.min)$beta *
+      y_train_list$std
+  )
 write.csv(
   df_reg_coef,
   paste(
@@ -477,7 +350,48 @@ write.csv(
   )
 )
 
+# Now for the D2
+cv_list_D2 = cv_genlasso(
+  X_train_,
+  y_train_,
+  D2,
+  foldid,
+  y_train_list,
+  minlam = c(1e-4, 1e-5),
+  maxsteps = c(5000, 5000)
+)
+coeff_D2_cv = coef(cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.min)
+plot(x_lfp, coeff_D2_cv$beta, type = "l")
+predict_plot_lfp(
+  cv_list_D2$genlasso.fit,
+  cv_list_D2$lambda.min,
+  X_train_,
+  X_test1_,
+  X_test2_,
+  y_train_list,
+  model = "genlasso"
+)
 
-# fix the saving!
-# save the prediction accouracies as well!
-# Fix seed!
+## SAVE REGRESSION COEFFICIENTS
+df_reg_coef <-
+  data.frame(
+    coef_D2_1se = coef(cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.1se)$beta * y_train_list$std,
+    coef_D2_cv = coef(cv_list_D2$genlasso.fit , lambda = cv_list_D2$lambda.min)$beta * y_train_list$std
+  )
+write.csv(
+  df_reg_coef,
+  paste(
+    path_base,
+    "regression_in_R/lfp_cl_D2_cv_reg_coeff.csv",
+    sep = ""
+  )
+)
+
+lm_df <- as.data.frame(cv_list_D2$lossmatrix)
+names(lm_df) <- cv_list_D2$lambda_vals
+write.csv(lm_df,
+          paste(
+            path_base,
+            "regression_in_R/lfp_cl_D2_cv_lossmatrix.csv",
+            sep = ""
+          ))

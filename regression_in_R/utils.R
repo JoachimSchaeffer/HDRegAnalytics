@@ -36,7 +36,7 @@ standardize_y_train <- function(y) {
     N <- size(y)[2]
   }
   mean_y <- mean(y)
-  std_y <- sqrt(var(y) * (N - 1) / N) [1, 1]
+  std_y <- sd(y)
   y_std_ <- (y - mean_y) / std_y
   return <-
     list(
@@ -166,12 +166,12 @@ cv_genlasso <-
   function(X_train_,
            y_train_,
            D,
-           nfolds = 5,
+           foldid,
+           y_train_list,
            plot_cv = T,
            minlam = c(1e-9, 1e-9),
-           maxsteps = c(2000, 2000)) {
-    N <- nrow(X_train_)
-    foldid <- sample(rep(seq(nfolds), length = N))
+           maxsteps = c(2000, 2000),
+           lambda_seq = 0) {
     op <- options(nwarnings = 10000) # Keep all warnings!
     genlasso.fit <-
       genlasso(y_train_,
@@ -179,6 +179,14 @@ cv_genlasso <-
                D,
                maxsteps = maxsteps[1],
                minlam = minlam[1])
+    if (lambda_seq[1] == 0) {
+      lambda_seq <- genlasso.fit$lambda
+      disp("Using automatically determined lambda seqeunce!")
+    }
+    else{
+      disp("Using custom lambda sequence!")
+    }
+
     ## Evaluate each lambda on each fold:
     fold.lambda.losses <-
       tapply(seq_along(foldid), foldid, function(fold.indices) {
@@ -192,11 +200,12 @@ cv_genlasso <-
         )
 
         fold.genlasso.preds <- predict(fold.genlasso.fit,
-                                       lambda = genlasso.fit$lambda,
+                                       lambda = lambda_seq,
                                        Xnew = X_train_[fold.indices, ])$fit
 
+        # Rewrite with error in Logspace!
         lambda.losses <-
-          colMeans((fold.genlasso.preds - y_train_[fold.indices]) ^ 2)
+          colMeans((exp(rescale_y(fold.genlasso.preds)) - exp(rescale_y(y_train_[fold.indices]))) ^ 2)
 
         return (lambda.losses)
       })
@@ -204,13 +213,11 @@ cv_genlasso <-
     cv.lossmatrix <- do.call(rbind, fold.lambda.losses)
     cv.lambda.losses <- colMeans(cv.lossmatrix)
     cv.lambda.losses_sd <- colStdevs(cv.lossmatrix)
-    cv.genlasso.lambda.min <-
-      genlasso.fit$lambda[which.min(cv.lambda.losses)]
+    cv.genlasso.lambda.min <- lambda_seq[which.min(cv.lambda.losses)]
 
     id_min <-
       which(cv.lambda.losses == min(cv.lambda.losses), arr.ind = TRUE)
-    lambda_min_loss <-
-      genlasso.fit$lambda[id_min]
+    lambda_min_loss <- lambda_seq[id_min]
 
     print("Min Lambda CV")
     print(lambda_min_loss)
@@ -218,14 +225,14 @@ cv_genlasso <-
     loss_larger_than_1se <-
       cv.lambda.losses > (cv.lambda.losses_sd[id_min] + min(cv.lambda.losses))
     id_1se <- min(which(loss_larger_than_1se == FALSE))
-    lambda_cv_1se <- genlasso.fit$lambda[id_1se]
+    lambda_cv_1se <- lambda_seq[id_1se]
     print("Min Lambda 1SE CV")
     print(lambda_cv_1se)
     if (plot_cv == TRUE) {
 
     }
     matplot(
-      genlasso.fit$lambda,
+      lambda_seq,
       cv.lambda.losses,
       type = "l",
       ylab = "loss",
@@ -234,7 +241,7 @@ cv_genlasso <-
       log = "x"
     )
     matplot(
-      genlasso.fit$lambda,
+      lambda_seq,
       cv.lambda.losses + cv.lambda.losses_sd,
       type = "l",
       ylab = "loss",
@@ -247,7 +254,7 @@ cv_genlasso <-
       list(
         "genlasso.fit" = genlasso.fit,
         "lossmatrix" = cv.lossmatrix,
-        "lambda_vals" = genlasso.fit$lambda,
+        "lambda_vals" = lambda_seq,
         "lambda.min" = lambda_min_loss,
         "lambda.1se" = lambda_cv_1se
       )
