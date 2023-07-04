@@ -356,3 +356,25 @@ def nrmse(
         y_pred = X @ beta
 
     return 100 * mean_squared_error(y, y_pred, squared=False) / (np.max(y) - np.min(y))
+
+
+def predict_LFP_based_on_coef(Xtr, Xt1, Xt2, y, y_test, y_test2, coef, y_mean, df, name):
+
+    y_pred_train = np.exp(np.dot(Xtr, coef) + y_mean)
+    y_pred_test1 = np.exp(np.dot(Xt1, coef) + y_mean)
+    y_pred_test2 = np.exp(np.dot(Xt2, coef) + y_mean)
+
+    # Get the RMSE Errors
+    rmse_train = np.sqrt(np.mean((y_pred_train - y)**2))
+    rmse_test1 = np.sqrt(np.mean((y_pred_test1 - y_test)**2))
+    rmse_test2 = np.sqrt(np.mean((y_pred_test2 - y_test2)**2))
+
+    # Store the results in the dataframe rounded to the next integer
+    df.loc['Train', name] = np.round(rmse_train, 0)
+    df.loc['Test 1', name] = np.round(rmse_test1, 0)
+    df.loc['Test 2', name] = np.round(rmse_test2, 0)
+
+    print("RMSE Train: ", np.round(rmse_train, 2))
+    print("RMSE Test 1: ", np.round(rmse_test1, 2))
+    print("RMSE Test 2: ", np.round(rmse_test2, 2))
+    return df

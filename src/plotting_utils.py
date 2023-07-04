@@ -510,11 +510,18 @@ def scatter_predictions(
     else:
         fig = ax.get_figure()
 
+    if "y_transform" in kwargs:
+        y_transform = kwargs["y_transform"]
+    else:
+        def y_transform(x):
+            return x
+
     y = y_ + y_mean
+    y = y_transform(y)
     y_pred = []
     nrmse_ = []
     for i, w_ in enumerate(w):
-        y_pred.append((X @ w_) + y_mean)
+        y_pred.append(y_transform((X @ w_) + y_mean))
         nrmse_.append(nrmse(y, y_pred[i]))
 
     # Make a twinx axis
@@ -721,3 +728,44 @@ def plot_snr_analysis(
         return fig, ax
     else:
         plt.show()
+
+
+def vis_reg_coef(
+    *,
+    beta: np.ndarray,
+    d: np.ndarray,
+    y: np.ndarray,
+    label: dict = None,
+    fig: plt.figure = None,
+    ax: plt.axes = None,
+    cid: int = 0,
+    return_fig: bool = True,
+    **kwargs,
+) :
+    """Plot the nullspace correction"""
+    y = y - np.mean(y)
+    color_list = ["darkgreen", "#0051a2", "#97964a", "#f4777f", "#93003a"]
+    if ax is None:
+        figsize = [11, 8]
+        fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)
+
+    # markevery = int(len(x) / 15)
+    ax.plot(
+        d,
+        beta,
+        label=label,
+        color=color_list[cid],
+        linewidth=3,
+        **kwargs,
+    )
+    ax.set_xlim(min(d), max(d))
+
+    # ax.set_title("Regression Coefficients")
+    ax.grid(zorder=1)
+    ax.legend(loc=2)
+
+    if return_fig:
+        return fig, ax
+    else:
+        plt.show()
+        return None
