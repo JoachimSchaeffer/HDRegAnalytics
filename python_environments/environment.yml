@@ -2,9 +2,9 @@ name: HDRegAnalytics
 channels:
   - defaults
 dependencies:
-  - pip=21.2.4=py310hecd8cb5_0
-  - python=3.10.0=hdfd78df_5
-  - wheel=0.37.1=pyhd3eb1b0_0
+  - pip=21.2.4
+  - python=3.10.0
+  - wheel=0.37.1
   - pip:
       - flake8==4.0.1
       - flatten-dict==0.4.2
