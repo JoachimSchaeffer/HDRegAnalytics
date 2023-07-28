@@ -59,7 +59,9 @@ class BasisFunction(ABC):
 
 
 class PolynomBasis(BasisFunction):
-    def __init__(self, num_basis: int, data_limits: list = None, center : float = None, **kwargs):
+    def __init__(
+        self, num_basis: int, data_limits: list = None, center: float = None, **kwargs
+    ):
         super().__init__(num_basis, data_limits, **kwargs)
         self.center = center
 

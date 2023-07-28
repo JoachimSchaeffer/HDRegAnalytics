@@ -323,7 +323,9 @@ def plot_nullspace_analysis(
     if "layout_type" in kwargs:
         if kwargs["layout_type"] == "row":
             figsize = [11, 13]
-            fig, ax = plt.subplots(2, 1, figsize=figsize, constrained_layout=True, sharex='all')
+            fig, ax = plt.subplots(
+                2, 1, figsize=figsize, constrained_layout=True, sharex="all"
+            )
         elif kwargs["layout_type"] == "column":
             figsize = TWO_COL_FIGSIZE
             fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
@@ -348,7 +350,9 @@ def plot_nullspace_analysis(
     ax[0].hlines(0, min(d), max(d), colors="k", linestyles="solid", linewidths=0.8)
     ax[0].set_ylim(y_min, y_max)
     trans = mtransforms.ScaledTranslation(-55 / 72, 20 / 72, fig.dpi_scale_trans)
-    fig, ax[0] = set_axis_label(fig, ax[0], trans, label_str=ax_labelstr[0], loc=(0.0, 1.0))
+    fig, ax[0] = set_axis_label(
+        fig, ax[0], trans, label_str=ax_labelstr[0], loc=(0.0, 1.0)
+    )
 
     # markevery = int(len(x) / 15)
     ax[1].plot(
@@ -415,7 +419,9 @@ def plot_nullspace_analysis(
     ax[1].set_xlim(min(d), max(d))
     ax[1].set_ylim(y_min, y_max)
     ax[1].set_title("Nullspace Perspective")
-    fig, ax[1] = set_axis_label(fig, ax[1], trans, label_str=ax_labelstr[1], loc=(-0.04, 1.0))
+    fig, ax[1] = set_axis_label(
+        fig, ax[1], trans, label_str=ax_labelstr[1], loc=(-0.04, 1.0)
+    )
 
     if v.shape[0] > 1:
         cb = fig.colorbar(cm.ScalarMappable(norm=cNorm, cmap=cmap), ax=ax[1], pad=0.01)
@@ -513,6 +519,7 @@ def scatter_predictions(
     if "y_transform" in kwargs:
         y_transform = kwargs["y_transform"]
     else:
+
         def y_transform(x):
             return x
 
@@ -651,7 +658,7 @@ def plot_snr_analysis(
     d: np.ndarray = None,
     s: float = None,
     title: str = "SNR Analysis, Bspline",
-    return_fig : bool = True,
+    return_fig: bool = True,
 ):
     """
     Plotting the SNR, data stats snr/mean and snr/std ratios.
@@ -741,7 +748,7 @@ def vis_reg_coef(
     cid: int = 0,
     return_fig: bool = True,
     **kwargs,
-) :
+):
     """Plot the nullspace correction"""
     y = y - np.mean(y)
     color_list = ["darkgreen", "#0051a2", "#97964a", "#f4777f", "#93003a"]

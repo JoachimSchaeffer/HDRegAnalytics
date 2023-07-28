@@ -5,4 +5,4 @@ axes.labelsize : 21    # fontsize of the x and y labels
 xtick.labelsize : 17    # fontsize of the tick labels
 ytick.labelsize : 17    # fontsize of the tick labels
 legend.fontsize : 17   # legend fontsize
-figure.titlesize : 24  # fontsize of the figure title
+figure.titlesize : 24  # fontsize of the figure title 

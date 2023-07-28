@@ -401,20 +401,26 @@ def predict_LFP_based_on_coef(
         df.loc[f"Train Low CL ({len(ind_train_low[0])})", name] = np.round(rmse_train, 0)
         df.loc[f"Test 1 Low CL ({len(ind_test1_low[0])})", name] = np.round(rmse_test1, 0)
         df.loc[f"Test 2 Low CL ({len(ind_test2_low[0])})", name] = np.round(rmse_test2, 0)
-        df.loc[f"Train High CL ({len(ind_train_high[0])})", name] = np.round(rmse_train_high, 0)
-        df.loc[f"Test 1 High CL ({len(ind_test1_high[0])})", name] = np.round(rmse_test1_high, 0)
-        df.loc[f"Test 2 High CL ({len(ind_test2_high[0])})", name] = np.round(rmse_test2_high, 0)
+        df.loc[f"Train High CL ({len(ind_train_high[0])})", name] = np.round(
+            rmse_train_high, 0
+        )
+        df.loc[f"Test 1 High CL ({len(ind_test1_high[0])})", name] = np.round(
+            rmse_test1_high, 0
+        )
+        df.loc[f"Test 2 High CL ({len(ind_test2_high[0])})", name] = np.round(
+            rmse_test2_high, 0
+        )
 
     return df
 
 
 def project_reg_coeff_onto_nulls(reg_coeff, X):
-    proj_matrix = (np.eye(X.shape[1])-X.T@scipy.linalg.inv(X@X.T)@X)
-    proj_vector = proj_matrix@reg_coeff
+    proj_matrix = np.eye(X.shape[1]) - X.T @ scipy.linalg.inv(X @ X.T) @ X
+    proj_vector = proj_matrix @ reg_coeff
     return proj_vector
 
 
 def project_reg_coeff_onto_space_by_basis(reg_coeff, SX):
-    proj_matrix = (SX@scipy.linalg.inv(SX.T@SX)@SX.T)
-    proj_vector = proj_matrix@reg_coeff
+    proj_matrix = SX @ scipy.linalg.inv(SX.T @ SX) @ SX.T
+    proj_vector = proj_matrix @ reg_coeff
     return proj_vector

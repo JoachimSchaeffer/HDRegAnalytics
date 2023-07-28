@@ -193,7 +193,9 @@ class HD_Data:
             X_spline[i, :] = BSpline(*tck)(self.d)
 
         snr, noise_power = calc_snr(X_spline, X_)
-        fig, ax = plot_snr_analysis(X_, snr, noise_power, d=self.d, s=s, title="", return_fig=True, **kwargs)
+        fig, ax = plot_snr_analysis(
+            X_, snr, noise_power, d=self.d, s=s, title="", return_fig=True, **kwargs
+        )
 
         if plot_i is not None:
             X_i = X_[plot_i, :]

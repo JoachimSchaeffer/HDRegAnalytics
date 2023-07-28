@@ -76,9 +76,7 @@ class Nullspace:
                 self.weights[string_id[i] + " std"] = coef_std
                 self.weights[string_id[i] + " std retrans"] = coef_std / self.data.stdx
             except ZeroDivisionError:
-                self.weights[
-                    string_id[i] + " std"
-                ] = "Undefined Std = 0 for some column"
+                self.weights[string_id[i] + " std"] = "Undefined Std = 0 for some column"
                 self.weights[
                     string_id[i] + " std retrans"
                 ] = "Undefined Std = 0 for some column"
@@ -175,9 +173,7 @@ class Nullspace:
                     * mean_squared_error(self.y, self.X @ (self.w_beta), squared=False)
                     / range_y
                 )
-                self.con_thres = np.abs(self.con_thres) * np.abs(
-                    nrmse_alpha - nrmse_beta
-                )
+                self.con_thres = np.abs(self.con_thres) * np.abs(nrmse_alpha - nrmse_beta)
                 print("NRMSE constraint threshold: ", self.con_thres)
 
             self.optimize_gamma(nullspace_path=nullspace_path)
@@ -251,9 +247,7 @@ class Nullspace:
         self.con_val = con_val
 
         if nullspace_path & (type(self.max_gamma) in [np.float64, float, np.float32]):
-            gamma_vals = np.geomspace(
-                10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30
-            )
+            gamma_vals = np.geomspace(10 ** (-12), self.max_gamma + 2 * (10 ** (-12)), 30)
         else:
             gamma_vals = np.array(self.max_gamma).reshape(1)
 
@@ -378,9 +372,7 @@ class Nullspace:
                 100 * mean_squared_error(self.y, y_pred_alpha, squared=False) / span_y
             )
             nrmse_nulls = (
-                100
-                * mean_squared_error(self.y, y_pred_alpha_v_, squared=False)
-                / span_y
+                100 * mean_squared_error(self.y, y_pred_alpha_v_, squared=False) / span_y
             )
             val = np.abs(nrmse_reg - nrmse_nulls) + 100 * np.sqrt(
                 self.X.shape[1]
@@ -494,7 +486,9 @@ class Nullspace:
         )
         nrmse_alpha_v = (
             100
-            * mean_squared_error(self.y, self.X @ (self.w_alpha + self.nullsp["v_"][-1, :]), squared=False)
+            * mean_squared_error(
+                self.y, self.X @ (self.w_alpha + self.nullsp["v_"][-1, :]), squared=False
+            )
             / (np.max(self.y) - np.min(self.y))
         )
         nrmse_beta = (
@@ -529,8 +523,7 @@ class Nullspace:
         #    + f"{self.con_val:.{fprecision}f}%"
         # )
         text_nullsp = (
-            ", " + gamma_str + ", "
-            + r"$NRMSE:$ " + f"{nrmse_alpha_v:.{fprecision}f}%"
+            ", " + gamma_str + ", " + r"$NRMSE:$ " + f"{nrmse_alpha_v:.{fprecision}f}%"
         )
         self.label_dict["alpha+v pred"] = text_pred + text_nullsp
         self.label_dict["alpha+v coef"] = text_coef + text_nullsp
