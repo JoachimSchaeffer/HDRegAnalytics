@@ -410,17 +410,18 @@ def predict_LFP_based_on_coef(
         df.loc[f"Test 2 High CL ({len(ind_test2_high[0])})", name] = np.round(
             rmse_test2_high, 0
         )
-
     return df
 
 
-def project_reg_coeff_onto_nulls(reg_coeff, X):
+def project_reg_coeff_onto_nulls(reg_coeff: np.ndarray, X: np.ndarray) -> np.ndarray:
     proj_matrix = np.eye(X.shape[1]) - X.T @ scipy.linalg.inv(X @ X.T) @ X
     proj_vector = proj_matrix @ reg_coeff
     return proj_vector
 
 
-def project_reg_coeff_onto_space_by_basis(reg_coeff, SX):
+def project_reg_coeff_onto_space_by_basis(
+    reg_coeff: np.ndarray, SX: np.ndarray
+) -> np.ndarray:
     proj_matrix = SX @ scipy.linalg.inv(SX.T @ SX) @ SX.T
     proj_vector = proj_matrix @ reg_coeff
     return proj_vector
