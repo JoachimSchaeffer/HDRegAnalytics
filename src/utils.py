@@ -1,5 +1,6 @@
 # Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 import numpy as np
+import scipy
 
 import matplotlib.pyplot as plt  # type: ignore
 from sklearn.cross_decomposition import PLSRegression  # type: ignore
@@ -405,3 +406,15 @@ def predict_LFP_based_on_coef(
         df.loc[f"Test 2 High CL ({len(ind_test2_high[0])})", name] = np.round(rmse_test2_high, 0)
 
     return df
+
+
+def project_reg_coeff_onto_nulls(reg_coeff, X):
+    proj_matrix = (np.eye(X.shape[1])-X.T@scipy.linalg.inv(X@X.T)@X)
+    proj_vector = proj_matrix@reg_coeff
+    return proj_vector
+
+
+def project_reg_coeff_onto_space_by_basis(reg_coeff, SX):
+    proj_matrix = (SX@scipy.linalg.inv(SX.T@SX)@SX.T)
+    proj_vector = proj_matrix@reg_coeff
+    return proj_vector
