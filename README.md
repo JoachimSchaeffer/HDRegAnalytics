@@ -25,6 +25,7 @@ All this python code and tooling has dependencies which are encoded in the envir
 To install the anaconda environment, you need to have anaconda installed, then run:
 ```shell
 conda env create --file python_environments/environment.yml
+conda activate HDRegAnalytics
 ```
 Known issue: You need to have a working installation of latex and all other requirtements for matplotlib wokring with latex. 
 More information here [MatplotlibLatex](https://matplotlib.org/stable/tutorials/text/usetex.html).

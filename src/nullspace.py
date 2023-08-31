@@ -7,12 +7,12 @@ from scipy.optimize import minimize  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
 import matplotlib.pylab as plt  # type: ignore
 import time
-from plotting_utils import plot_nullspace_analysis
-from plotting_utils import scatter_predictions as scatter_predictions_helper
-from hd_data import HD_Data
 from typing import Union
 from typing import Protocol
 import warnings
+from src.plotting_utils import plot_nullspace_analysis
+from src.plotting_utils import scatter_predictions as scatter_predictions_helper
+from src.hd_data import HD_Data
 
 
 # source: https://stackoverflow.com/questions/54868698/what-type-is-a-sklearn-model

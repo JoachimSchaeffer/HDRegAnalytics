@@ -7,10 +7,6 @@ import seaborn as sns  # type: ignore
 
 from sklearn.preprocessing import StandardScaler  # type: ignore
 from sklearn.metrics import mean_squared_error  # type: ignore
-
-from utils import optimize_pls_cv
-from utils import nrmse  # type: ignore
-from utils import optimize_rr_cv, optimize_rr_min_dist
 from typing import Union
 
 import matplotlib
@@ -20,6 +16,10 @@ from matplotlib import cm  # noqa type: ignore
 import matplotlib.cm as cmx  # noqa type: ignore
 import matplotlib.transforms as mtransforms  # noqa type: ignore
 from matplotview import inset_zoom_axes
+
+from src.utils import optimize_pls_cv
+from src.utils import nrmse  # type: ignore
+from src.utils import optimize_rr_cv, optimize_rr_min_dist
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 TWO_COL_FIGSIZE = [22, 8]

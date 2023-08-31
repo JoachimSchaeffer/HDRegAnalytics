@@ -5,7 +5,7 @@ from scipy.interpolate import splrep, BSpline  # noqa
 from scipy.signal import savgol_filter  # noqa
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.colors as clr  # type: ignore
-from plotting_utils import plot_corrheatmap, plot_snr_analysis
+from src.plotting_utils import plot_corrheatmap, plot_snr_analysis
 
 colors_IBM = ["#648fff", "#785ef0", "#dc267f", "#fe6100", "#ffb000", "#000000"]
 cmap_IBM = clr.LinearSegmentedColormap.from_list(
