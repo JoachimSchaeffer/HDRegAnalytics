@@ -1,4 +1,4 @@
-# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# Copyright: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 # NOTE: This is a helper script for making the plots for the associated article.
 # The plots are somewhat customized, there might be the need to adapt these helper functions to your needs.
 import numpy as np

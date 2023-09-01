@@ -1,4 +1,4 @@
-# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# Copyright: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
 from numpy import linalg as LA

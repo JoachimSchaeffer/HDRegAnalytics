@@ -2,7 +2,7 @@ Author: Joachim Schaeffer
 Email: joachim.schaeffer@posteo.de
 
 ReadMe for repository acssocaited with the article: 
-Interpretation of High-Dimensional Linear Regression — Effects of Nullsapce and Regularization Demonstrated on Battery Data
+Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data
 
 ## Code
 
@@ -31,3 +31,17 @@ Known issue: You need to have a working installation of latex and all other requ
 More information here [MatplotlibLatex](https://matplotlib.org/stable/tutorials/text/usetex.html).
 
 We recommend using R-Studio for running the R code contained in the folder regression_in_R. 
+
+
+## License
+
+The code is licensed according to the terms of the AGPL-3.0 License.
+The license for the LFP data is included in the data folde: 
+- [lfpdatalicense.md](data/lfpdatalicense.md)
+
+## Acknowledgment/Citation
+
+If you use code, results or ideas form this repository for your own work, please cite: 
+
+"Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data"
+Full bibliography infromation will be provided upon release of the manuscript on arxiv, scheduled for Monday 4th of September 2023.

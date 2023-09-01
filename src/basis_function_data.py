@@ -2,7 +2,7 @@
 # https://github.com/lawrennd/mlai/
 # based on commit: bb4b776a21ec17001bf20ee6406324217f902944
 # expand it to the different basis funcitons in the source.
-# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# Copyright: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt  # type: ignore

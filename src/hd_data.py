@@ -1,4 +1,4 @@
-# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# Copyright: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 from __future__ import annotations
 import numpy as np
 from scipy.interpolate import splrep, BSpline  # noqa

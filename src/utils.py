@@ -1,4 +1,4 @@
-# Author: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
+# Copyright: Joachim Schaeffer, 2023, joachim.schaeffer@posteo.de
 import numpy as np
 import scipy
 
