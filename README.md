@@ -1,11 +1,11 @@
-Author: Joachim Schaeffer
-Email: joachim.schaeffer@posteo.de
+# ReadMe for the repository associated with:
 
-ReadMe for the repository associated with the article: 
+### "Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data"  
 
-Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data
+<a href="https://arxiv.org/abs/2309.00564" target="_blank">https://arxiv.org/abs/2309.00564</a>  
 
-<a href="https://arxiv.org/abs/2309.00564" target="_blank">https://arxiv.org/abs/2309.00564</a>
+Author: Joachim Schaeffer  
+Email: joachim.schaeffer@posteo.de  
 
 ## Code
 
@@ -48,11 +48,11 @@ If you use code, results, or ideas from this repository for your work, please ci
 
 "Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data"
 
-@misc{schaeffer2023interpretation,
-      title={Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data}, 
-      author={Joachim Schaeffer and Eric Lenz and William C. Chueh and Martin Z. Bazant and Rolf Findeisen and Richard D. Braatz},
-      year={2023},
-      eprint={2309.00564},
-      archivePrefix={arXiv},
-      primaryClass={stat.ML}
-}
+@misc{schaeffer2023interpretation,  
+      title={Interpretation of High-Dimensional Linear Regression: Effects of Nullspace and Regularization Demonstrated on Battery Data},   
+      author={Joachim Schaeffer and Eric Lenz and William C. Chueh and Martin Z. Bazant and Rolf Findeisen and Richard D. Braatz},  
+      year={2023},  
+      eprint={2309.00564},  
+      archivePrefix={arXiv},  
+      primaryClass={stat.ML}  
+}  
