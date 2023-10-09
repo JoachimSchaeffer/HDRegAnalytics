@@ -359,8 +359,15 @@ def nrmse(
     return 100 * mean_squared_error(y, y_pred, squared=False) / (np.max(y) - np.min(y))
 
 
-def rmse(y_pred, y):
+def rmse(y, y_pred):
     return np.sqrt(np.mean((y_pred - y) ** 2))
+
+
+def rmse_tri(y_train, y_pred_train, y_test1, y_pred_test1, y_test2, y_pred_test2):
+    RMSE_train = rmse(y_pred_train, y_train)
+    RMSE_test1 = rmse(y_pred_test1, y_test1)
+    RMSE_test2 = rmse(y_pred_test2, y_test2)
+    return RMSE_train, RMSE_test1, RMSE_test2
 
 
 def predict_LFP_based_on_coef(
@@ -371,9 +378,9 @@ def predict_LFP_based_on_coef(
     y_pred_test2 = np.exp(np.dot(Xt2, coef) + y_mean)
 
     # Get the RMSE Errors
-    rmse_train = rmse(y_pred_train, y)
-    rmse_test1 = rmse(y_pred_test1, y_test)
-    rmse_test2 = rmse(y_pred_test2, y_test2)
+    rmse_train, rmse_test1, rmse_test2 = rmse_tri(
+        y, y_pred_train, y_test, y_pred_test1, y_test2, y_pred_test2
+    )
 
     # Store the results in the dataframe rounded to the next integer
     df.loc[f"Train ({len(y_pred_train)})", name] = np.round(rmse_train, 0)
@@ -385,17 +392,17 @@ def predict_LFP_based_on_coef(
     print("RMSE Test 2: ", np.round(rmse_test2, 2))
     if split_eval_cycle is not None:
         ind_train_low = np.where(y <= split_eval_cycle)
-        rmse_train = rmse(y_pred_train[ind_train_low], y[ind_train_low])
         ind_test1_low = np.where(y_test <= split_eval_cycle)
-        rmse_test1 = rmse(y_pred_test1[ind_test1_low], y_test[ind_test1_low])
         ind_test2_low = np.where(y_test2 <= split_eval_cycle)
+        rmse_train = rmse(y_pred_train[ind_train_low], y[ind_train_low])
+        rmse_test1 = rmse(y_pred_test1[ind_test1_low], y_test[ind_test1_low])
         rmse_test2 = rmse(y_pred_test2[ind_test2_low], y_test2[ind_test2_low])
 
         ind_train_high = np.where(y > split_eval_cycle)
-        rmse_train_high = rmse(y_pred_train[ind_train_high], y[ind_train_high])
         ind_test1_high = np.where(y_test > split_eval_cycle)
-        rmse_test1_high = rmse(y_pred_test1[ind_test1_high], y_test[ind_test1_high])
         ind_test2_high = np.where(y_test2 > split_eval_cycle)
+        rmse_train_high = rmse(y_pred_train[ind_train_high], y[ind_train_high])
+        rmse_test1_high = rmse(y_pred_test1[ind_test1_high], y_test[ind_test1_high])
         rmse_test2_high = rmse(y_pred_test2[ind_test2_high], y_test2[ind_test2_high])
 
         df.loc[f"Train Low CL ({len(ind_train_low[0])})", name] = np.round(rmse_train, 0)
@@ -411,6 +418,100 @@ def predict_LFP_based_on_coef(
             rmse_test2_high, 0
         )
     return df
+
+
+def scatter_LFP_based_on_coef(
+    Xtr: np.ndarray,
+    Xt1: np.ndarray,
+    Xt2: np.ndarray,
+    y: np.ndarray,
+    y_test: np.ndarray,
+    y_test2: np.ndarray,
+    coef: np.ndarray,
+    y_mean: float,
+    split_eval_cycle: int = None,
+    title: str = None,
+    save_path: str = None,
+    ax: plt.Axes = None,
+):
+    y_pred_train = np.exp(np.dot(Xtr, coef) + y_mean)
+    y_pred_test1 = np.exp(np.dot(Xt1, coef) + y_mean)
+    y_pred_test2 = np.exp(np.dot(Xt2, coef) + y_mean)
+
+    return_ax = True
+    if ax is None:
+        return_ax = False
+        fig, ax = plt.subplots()
+
+    ax.scatter(y, y_pred_train, marker="o", color="b", label="Training")
+    ax.scatter(y_test, y_pred_test1, marker="^", color="C1", label="Prim. Test")
+    ax.scatter(y_test2, y_pred_test2, marker="s", color="r", label="Sec. Test")
+
+    ax.set_xlim(0, 2500)
+    ax.set_ylim(0, 2500)
+    ax.plot([0, 2500], [0, 2500], color="k")
+    ax.set_aspect("equal", "box")
+
+    ax.set_xlabel("Observed Cycle Life", fontsize=18)
+    ax.set_ylabel("Predicted Cylce Life", fontsize=18)
+
+    if title is not None:
+        ax.set_title(str(title), fontsize=23)
+
+    rmse_train, rmse_test1, rmse_test2 = rmse_tri(
+        y, y_pred_train, y_test, y_pred_test1, y_test2, y_pred_test2
+    )
+
+    ind_train_low = np.where(y <= split_eval_cycle)
+    ind_test1_low = np.where(y_test <= split_eval_cycle)
+    ind_test2_low = np.where(y_test2 <= split_eval_cycle)
+    rmse_train_low = rmse(y_pred_train[ind_train_low], y[ind_train_low])
+    rmse_test1_low = rmse(y_pred_test1[ind_test1_low], y_test[ind_test1_low])
+    rmse_test2_low = rmse(y_pred_test2[ind_test2_low], y_test2[ind_test2_low])
+
+    textstr = "\n".join(
+        (
+            "RMSE:",
+            "  Training =%.1f" % (rmse_train,),
+            "  Prim. Test =%.1f" % (rmse_test1,),
+            "  Sec. Test =%.1f" % (rmse_test2,),
+            f"RMSE < {split_eval_cycle}:",
+            "  Training =%.1f" % (rmse_train_low,),
+            "  Prim. Test =%.1f" % (rmse_test1_low,),
+            "  Sec. Test =%.1f" % (rmse_test2_low,),
+        )
+    )
+
+    # these are matplotlib.patch.Patch properties
+    props = dict(boxstyle="round", facecolor="white", alpha=0.5)
+
+    # place a text box in upper left in axes coords
+    ax.text(
+        0.02,
+        0.98,
+        textstr,
+        transform=ax.transAxes,
+        fontsize=16,
+        verticalalignment="top",
+        bbox=props,
+    )
+
+    ax.legend(
+        loc="upper center",
+    )
+
+    if save_path is not None:
+        plt.tight_layout()
+        plt.savefig(
+            save_path + str(title).replace(" ", "") + ".pdf",
+            bbox_inches="tight",
+        )
+
+    if return_ax:
+        return ax
+    else:
+        plt.show()
+        return None
 
 
 def project_reg_coeff_onto_nulls(reg_coeff: np.ndarray, X: np.ndarray) -> np.ndarray:

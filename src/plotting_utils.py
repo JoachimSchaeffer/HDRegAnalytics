@@ -40,7 +40,15 @@ def plot_x_tt2(
         linestyle = kwargs["linestyle"]
     else:
         linestyle = "-"
-    ax.plot(d, X[:, :].T, linestyle, label=label_data, lw=1, color=color, zorder=zorder)
+    ax.plot(
+        d,
+        X[:, :].T,
+        linestyle=linestyle,
+        label=label_data,
+        lw=1,
+        color=color,
+        zorder=zorder,
+    )
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc=3)
@@ -305,6 +313,7 @@ def plot_nullspace_analysis(
     y = y - np.mean(y)
     X = X - np.mean(X, axis=0)
     color_list = ["#0051a2", "#97964a", "#f4777f", "#93003a"]
+    marker_list = ["s", "d", "o", "h"]
     nrmse_vals = [
         100
         * mean_squared_error(y, X @ (w_alpha + v[-1, :]), squared=False)
@@ -337,7 +346,13 @@ def plot_nullspace_analysis(
         fig, ax = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
         layout_type = "column"
 
-    ax[0].plot(d, X[:, :].T, label="Training", lw=1, color=color_list[0])
+    ax[0].plot(
+        d,
+        X[:, :].T,
+        label="Training",
+        lw=1,
+        color=color_list[0],
+    )
     ax[0].set_title("Data")
     handles, labels = ax[0].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -354,7 +369,8 @@ def plot_nullspace_analysis(
         fig, ax[0], trans, label_str=ax_labelstr[0], loc=(0.0, 1.0)
     )
 
-    # markevery = int(len(x) / 15)
+    markevery = int(len(d) / 10)
+    markersize = 8
     ax[1].plot(
         d,
         w_alpha,
@@ -362,6 +378,9 @@ def plot_nullspace_analysis(
         color="darkgreen",
         linewidth=3,
         zorder=v.shape[0] + 1,
+        marker=marker_list[0],
+        markevery=markevery,
+        markersize=markersize - 2,
     )
 
     nrmse = -9999 * np.ones(v.shape[0])
@@ -381,6 +400,8 @@ def plot_nullspace_analysis(
             linewidth=1.8,
             label=label,
             # linestyle=(0, (1, 2)),
+            marker=marker_list[1],
+            markevery=(int(markevery / 3), markevery),
         )
 
     ax[1].plot(
@@ -390,6 +411,8 @@ def plot_nullspace_analysis(
         color="k",
         linewidth=3,
         zorder=2,
+        marker=marker_list[2],
+        markevery=(int((2 * markevery) / 3), markevery),
         # linestyle=(0, (6, 4)),
     )
 
@@ -665,6 +688,8 @@ def plot_snr_analysis(
     If you pass X_std, care should be taken b.c. the snr analysis is done on X wiht readded mean.
     Some code from here : https://stackoverflow.com/questions/20356982/matplotlib-colour-multiple-twinx-axes
     """
+    marker_list = ["s", "d", "o", "h"]
+    markevery = int(len(d) / 10)
     snr = 10 * np.log10(snr_power)
     if d is None:
         d = np.arange(X.shape[1])
@@ -678,13 +703,44 @@ def plot_snr_analysis(
     offset = 1.15
     ax0_1_twinx.spines["right"].set_position(("axes", offset))
 
-    ax[0].plot(d, snr, lw=1.5, color="k")
+    ax[0].plot(
+        d,
+        snr,
+        lw=1.5,
+        color="k",
+        label="SNR [dB]",
+        marker=marker_list[0],
+        markevery=(int(markevery / 3), markevery),
+    )
     ax[0].set_ylabel("SNR [dB]")
-    (snr_par,) = ax0_0_twinx.plot(d, snr_power, lw=1.5, color=colors_IBM[0])
+    (snr_par,) = ax0_0_twinx.plot(
+        d,
+        snr_power,
+        lw=1.5,
+        color=colors_IBM[0],
+        label="SNR",
+        marker=marker_list[1],
+        markevery=(int(2 * markevery / 3), markevery),
+    )
     ax0_0_twinx.set_ylabel("SNR")
-    (noise_par,) = ax0_1_twinx.plot(d, noise_power, lw=1.5, color=colors_IBM[3])
+    (noise_par,) = ax0_1_twinx.plot(
+        d,
+        noise_power,
+        lw=1.5,
+        color=colors_IBM[3],
+        label="Noise Power",
+        marker=marker_list[2],
+        markevery=markevery,
+    )
     ax0_1_twinx.set_ylabel("Noise Power")
     ax0_1_twinx.get_yaxis().get_offset_text().set_position((offset, offset - 0.1))
+    # Legend also for twinx, in a single legend
+    handles0, labels0 = ax[0].get_legend_handles_labels()
+    handles1, labels1 = ax0_0_twinx.get_legend_handles_labels()
+    handles2, labels2 = ax0_1_twinx.get_legend_handles_labels()
+    handles = handles0 + handles1 + handles2
+    labels = labels0 + labels1 + labels2
+    ax[0].legend(handles, labels, loc=6)
 
     if s is not None and title is None:
         ax[0].set_title(f"SNR Analysis, Bspline, s={s}")
@@ -693,11 +749,33 @@ def plot_snr_analysis(
 
     # Mean, and std plot of the data
     ax1_twinx = ax[1].twinx()
-    ax[1].plot(d, abs_x_mean, label="Mean", lw=1.5, color="k")
+    ax[1].plot(
+        d,
+        abs_x_mean,
+        label="Mean",
+        lw=1.5,
+        color="k",
+        marker=marker_list[0],
+        markevery=markevery,
+    )
     ax[1].set_ylabel(r"$\overline{X}$")
-    (std_,) = ax1_twinx.plot(d, std_x, label="Std.", lw=1.5, color=colors_IBM[0])
+    (std_,) = ax1_twinx.plot(
+        d,
+        std_x,
+        label="Std.",
+        lw=1.5,
+        color=colors_IBM[0],
+        marker=marker_list[1],
+        markevery=markevery,
+    )
     ax1_twinx.set_ylabel(r"$\sigma$")
     ax[1].set_xlabel(x_label)
+    # Legend also for twinx, in a single legend
+    handles0, labels0 = ax[1].get_legend_handles_labels()
+    handles1, labels1 = ax1_twinx.get_legend_handles_labels()
+    handles = handles0 + handles1
+    labels = labels0 + labels1
+    ax[1].legend(handles, labels)
 
     # SNR*std plot
     # ax_2_twinx = ax[2].twinx()
@@ -750,6 +828,13 @@ def vis_reg_coef(
     **kwargs,
 ):
     """Plot the nullspace correction"""
+    # if linewidth in kwargs then use that, otherwise use 2.5
+    if "linewidth" in kwargs:
+        linewidth = kwargs["linewidth"]
+        kwargs.pop("linewidth")
+    else:
+        linewidth = 3
+
     y = y - np.mean(y)
     color_list = ["darkgreen", "#0051a2", "#97964a", "#f4777f", "#93003a"]
     if ax is None:
@@ -762,7 +847,7 @@ def vis_reg_coef(
         beta,
         label=label,
         color=color_list[cid],
-        linewidth=3,
+        linewidth=linewidth,
         **kwargs,
     )
     ax.set_xlim(min(d), max(d))
